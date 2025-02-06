@@ -5,8 +5,6 @@ from typing import Dict, List, Literal
 from pydantic import BaseModel, Field
 from duckduckgo_search import DDGS
 from openai import OpenAI
-import json
-import hashlib
 from pathlib import Path
 import os
 from diskcache import Cache
@@ -18,32 +16,6 @@ client = OpenAI()
 DEV_MODE = os.getenv("AI_TOOLS_DEV", "false").lower() == "true"
 # Cache with 24 hour expiry and 1GB size limit
 cache = Cache("dev_cache", size_limit=int(1e9), timeout=60*60*24) if DEV_MODE else None
-
-def get_cache_key(query: str) -> str:
-    """Generate a cache key from a query."""
-    return hashlib.md5(query.encode()).hexdigest()
-
-def get_cached_results(query: str) -> List[Dict] | None:
-    """Get cached results for a query if they exist."""
-    if not DEV_MODE:
-        return None
-        
-    cache_file = Path(f"{get_cache_key(query)}.json")
-    if cache_file.exists():
-        logger.info(f"Using cached results for query: {query}")
-        with open(cache_file) as f:
-            return json.load(f)
-    return None
-
-def cache_results(query: str, results: List[Dict]) -> None:
-    """Cache results for a query."""
-    if not DEV_MODE:
-        return
-        
-    cache_file = Path(f"{get_cache_key(query)}.json")
-    with open(cache_file, "w") as f:
-        json.dump(results, f, indent=2)
-    logger.info(f"Cached results for query: {query}")
 
 CategoryType = Literal[
     "Language Models",
@@ -58,7 +30,7 @@ class ToolInfo(BaseModel):
     name: str = Field(..., description="Clean, concise name of the AI tool")
     description: str = Field(..., description="Clear, focused description under 150 chars")
     category: CategoryType
-    confidence: int = Field(..., ge=0, le=100, description="Confidence score between 0 and 100")
+    confidence: int = Field(..., description="Confidence score between 0 and 100")
 
 class AnalysisResult(BaseModel):
     is_valid_tool: bool = Field(..., description="Whether this is an actual AI tool/product")
@@ -79,7 +51,7 @@ def classify_results(results: List[Dict]) -> List[Dict]:
     
     try:
         completion = client.beta.chat.completions.parse(
-            model="gpt-4",
+            model="gpt-4o-mini", # DONT CHANGE THIS
             messages=[
                 {"role": "system", "content": """You are an expert curator of AI tools. 
 Analyze the search results and identify which ones are actual AI tools/products (not articles or lists).
