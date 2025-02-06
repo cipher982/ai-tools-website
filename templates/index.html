@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Tools Collection</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+</head>
+<body>
+    <main class="container">
+        <h1>AI Tools Collection</h1>
+        <p>Last updated: {{ last_updated }}</p>
+        
+        {% for category, tools in tools_by_category.items() %}
+        <section>
+            <h2>{{ category }}</h2>
+            <div class="grid">
+                {% for tool in tools %}
+                <article>
+                    <h3>{{ tool.name }}</h3>
+                    <p>{{ tool.description }}</p>
+                    <a href="{{ tool.url }}" role="button">Learn More</a>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    </main>
+</body>
+</html> 
