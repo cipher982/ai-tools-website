@@ -5,227 +5,355 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Tools Collection</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        :root {
+            --spacing: 0.75rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        .header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        .header p {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .search-box {
+            margin-bottom: 2rem;
+        }
+        .category-section {
+            margin-bottom: 3rem;
+        }
+        .category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--muted);
+        }
+        .category-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .tool-count {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        .tool-card {
+            background: var(--card-background-color);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .tool-card h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        .tool-card p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--muted);
+            flex-grow: 1;
+        }
+        .tool-card a {
+            margin-top: 1rem;
+            display: inline-block;
+            font-size: 0.9rem;
+        }
+        [data-theme="light"] {
+            --card-background-color: #f8f9fa;
+        }
+        [data-theme="dark"] {
+            --card-background-color: #242424;
+        }
+    </style>
 </head>
 <body>
     <main class="container">
-        <h1>AI Tools Collection</h1>
-        <p>Last updated: 2025-02-06 19:17 UTC</p>
+        <div class="header">
+            <h1>AI Tools Collection</h1>
+            <p>Last updated: 2025-02-06 21:26 UTC</p>
+        </div>
+
+        <div class="search-box">
+            <input type="search" id="search" placeholder="Search tools..." aria-label="Search tools">
+        </div>
+
         
-        
-        <section>
-            <h2>Language Models</h2>
-            <div class="grid">
+        <section class="category-section">
+            <div class="category-header">
+                <h2>Language Models</h2>
+                <span class="tool-count">7 tools</span>
+            </div>
+            <div class="tool-grid">
                 
-                <article>
+                <article class="tool-card" data-search="chatgpt large language model by openai for natural conversations and text generation">
                     <h3>ChatGPT</h3>
                     <p>Large language model by OpenAI for natural conversations and text generation</p>
-                    <a href="https://chat.openai.com" role="button">Learn More</a>
+                    <a href="https://chat.openai.com" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="beyond chatgpt: 14 mind-blowing ai tools everyone should be ... - forbes beyond chatgpt: 14 mind-blowing ai tools everyone should be trying out now. adobe stock. and far from simply being the latest "viral sensation," ai has truly become a technology that any business ...">
                     <h3>Beyond ChatGPT: 14 Mind-Blowing AI Tools Everyone Should Be ... - Forbes</h3>
                     <p>Beyond ChatGPT: 14 Mind-blowing AI Tools Everyone Should Be Trying Out Now. Adobe Stock. And far from simply being the latest "viral sensation," AI has truly become a technology that any business ...</p>
-                    <a href="https://www.forbes.com/sites/bernardmarr/2023/02/28/beyond-chatgpt-14-mind-blowing-ai-tools-everyone-should-be-trying-out-now/" role="button">Learn More</a>
+                    <a href="https://www.forbes.com/sites/bernardmarr/2023/02/28/beyond-chatgpt-14-mind-blowing-ai-tools-everyone-should-be-trying-out-now/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="7 best llm tools to run models locally (february 2025) isolated environments for each ai model; direct integration with business systems; visit ollama →. 4. lm studio. lm studio is a desktop application that lets you run ai language models directly on you...">
                     <h3>7 Best LLM Tools To Run Models Locally (February 2025)</h3>
                     <p>Isolated environments for each AI model; Direct integration with business systems; Visit Ollama →. 4. LM Studio. LM Studio is a desktop application that lets you run AI language models directly on you...</p>
-                    <a href="https://www.unite.ai/best-llm-tools-to-run-models-locally/" role="button">Learn More</a>
+                    <a href="https://www.unite.ai/best-llm-tools-to-run-models-locally/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="25 of the best large language models in 2025 - techtarget large language model meta ai (llama) is meta's llm which was first released in 2023. the llama 3.1 models were released in july 2024, including both a 405 billion and 70 billion parameter model. the m...">
                     <h3>25 of the best large language models in 2025 - TechTarget</h3>
                     <p>Large Language Model Meta AI (Llama) is Meta's LLM which was first released in 2023. The Llama 3.1 models were released in July 2024, including both a 405 billion and 70 billion parameter model. The m...</p>
-                    <a href="https://www.techtarget.com/WhatIs/feature/12-of-the-best-large-language-models" role="button">Learn More</a>
+                    <a href="https://www.techtarget.com/WhatIs/feature/12-of-the-best-large-language-models" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="ai language models: meaning, types, and future impact - autonomous today, these models are used in a wide range of applications, from chatbots to ai tools for coding. as ai language models continue to evolve, the future holds exciting possibilities. here are a few tr...">
                     <h3>AI Language Models: Meaning, Types, and Future Impact - Autonomous</h3>
                     <p>Today, these models are used in a wide range of applications, from chatbots to AI tools for coding. As AI language models continue to evolve, the future holds exciting possibilities. Here are a few tr...</p>
-                    <a href="https://www.autonomous.ai/ourblog/ai-language-models" role="button">Learn More</a>
+                    <a href="https://www.autonomous.ai/ourblog/ai-language-models" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="ai model tools comparison how to choose between sglang, ollama, vllm ... in-depth comparison and analysis of popular ai model deployment tools including sglang, ollama, vllm, and llama.cpp, helping developers and users choose the most suitable ai model deployment tool ... ...">
                     <h3>AI Model Tools Comparison How to Choose Between SGLang, Ollama, VLLM ...</h3>
                     <p>In-depth comparison and analysis of popular AI model deployment tools including SGLang, Ollama, VLLM, and LLaMA.cpp, helping developers and users choose the most suitable AI model deployment tool ... ...</p>
-                    <a href="https://stable-learn.com/en/ai-model-tools-comparison/" role="button">Learn More</a>
+                    <a href="https://stable-learn.com/en/ai-model-tools-comparison/" target="_blank" role="button" class="outline">Visit Tool →</a>
+                </article>
+                
+                <article class="tool-card" data-search="large language model (llm) frameworks and tools for natural language ... haystack is an open source nlp framework to interact with your data using transformer models and llms (gpt-3 and alike).">
+                    <h3>Large Language Model (LLM) Frameworks and Tools for Natural Language ...</h3>
+                    <p>Haystack is an open source NLP framework to interact with your data using Transformer models and LLMs (GPT-3 and alike).</p>
+                    <a href="https://aimodels.org/open-source-ai-tools/large-language-model-llm-frameworks-tools-natural-language-processing-nlp/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
             </div>
         </section>
         
-        <section>
-            <h2>Image Generation</h2>
-            <div class="grid">
+        <section class="category-section">
+            <div class="category-header">
+                <h2>Image Generation</h2>
+                <span class="tool-count">8 tools</span>
+            </div>
+            <div class="tool-grid">
                 
-                <article>
+                <article class="tool-card" data-search="midjourney ai art generation through discord">
                     <h3>Midjourney</h3>
                     <p>AI art generation through Discord</p>
-                    <a href="https://www.midjourney.com" role="button">Learn More</a>
+                    <a href="https://www.midjourney.com" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="15 top trending artificial intelligence(ai) tools list in 2024 explore the most popular ai tools for art, ppt, video, sales, and more. learn about their features, pricing, and how they use artificial intelligence algorithms to perform tasks and solve problems.">
                     <h3>15 Top Trending Artificial Intelligence(AI) Tools List in 2024</h3>
                     <p>Explore the most popular AI tools for art, PPT, video, sales, and more. Learn about their features, pricing, and how they use artificial intelligence algorithms to perform tasks and solve problems.</p>
-                    <a href="https://www.geeksforgeeks.org/top-artificial-intelligenceai-tools-list/" role="button">Learn More</a>
+                    <a href="https://www.geeksforgeeks.org/top-artificial-intelligenceai-tools-list/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="14 ai productivity tools to help you work smarter - upwork 14 ai productivity tools to help you work smarter learn the best ai productivity tools for efficient workflow, content creation, transcription, project management, and more.">
                     <h3>14 AI Productivity Tools To Help You Work Smarter - Upwork</h3>
                     <p>14 AI Productivity Tools To Help You Work Smarter Learn the best AI productivity tools for efficient workflow, content creation, transcription, project management, and more.</p>
-                    <a href="https://www.upwork.com/resources/ai-productivity-tools" role="button">Learn More</a>
+                    <a href="https://www.upwork.com/resources/ai-productivity-tools" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="ai image generator - deepai use this online tool to generate high-quality images from scratch based on your text prompts. choose from various styles, customize settings, and download or share your creations.">
                     <h3>AI Image Generator - DeepAI</h3>
                     <p>Use this online tool to generate high-quality images from scratch based on your text prompts. Choose from various styles, customize settings, and download or share your creations.</p>
-                    <a href="https://deepai.org/machine-learning-model/text2img" role="button">Learn More</a>
+                    <a href="https://deepai.org/machine-learning-model/text2img" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="free ai image generator (no login required) why choose our ai image generator? create stunning, unique images with the power of advanced ai models. multiple ai models including midjourney, dall-e 3, and more; high-quality image generation in va...">
                     <h3>Free AI Image Generator (No Login Required)</h3>
                     <p>Why Choose Our AI Image Generator? Create stunning, unique images with the power of advanced AI models. Multiple AI models including Midjourney, DALL-E 3, and more; High-quality image generation in va...</p>
-                    <a href="https://galaxy.ai/ai-image-generator" role="button">Learn More</a>
+                    <a href="https://galaxy.ai/ai-image-generator" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="tested: the best ai image generators for 2025 | pcmag dall-e is a text-to-image generation tool from openai (the creator of chatgpt), and much like company's other ai tools, using it is as easy as typing a prompt into a text entry field.">
                     <h3>Tested: The Best AI Image Generators for 2025 | PCMag</h3>
                     <p>Dall-E is a text-to-image generation tool from OpenAI (the creator of ChatGPT), and much like company's other AI tools, using it is as easy as typing a prompt into a text entry field.</p>
-                    <a href="https://www.pcmag.com/picks/the-best-ai-image-generators" role="button">Learn More</a>
+                    <a href="https://www.pcmag.com/picks/the-best-ai-image-generators" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="craiyon - your free ai image generator tool: create ai art! previously known as dall·e mini, craiyon is the new kid on the tech block and the best ai art generator (in our community's words!). the brainchild of our ceo, lead researcher, and ai hero, boris daym...">
                     <h3>Craiyon - Your FREE AI image generator tool: Create AI art!</h3>
                     <p>Previously known as DALL·E mini, Craiyon is the new kid on the tech block and the best AI art generator (in our community's words!). The brainchild of our CEO, lead researcher, and AI hero, Boris Daym...</p>
-                    <a href="https://www.craiyon.com/" role="button">Learn More</a>
+                    <a href="https://www.craiyon.com/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="free ai image generator, text to image app from microsoft designer ... create any image you can dream up with microsoft's ai image generator. just write a description of the image you'd like and watch the text to image transformation happen in seconds with dall-e 3.">
                     <h3>Free AI Image Generator, Text to Image App from Microsoft Designer ...</h3>
                     <p>Create any image you can dream up with Microsoft's AI image generator. Just write a description of the image you'd like and watch the text to image transformation happen in seconds with DALL-E 3.</p>
-                    <a href="https://create.microsoft.com/en-us/features/ai-image-generator" role="button">Learn More</a>
+                    <a href="https://create.microsoft.com/en-us/features/ai-image-generator" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
             </div>
         </section>
         
-        <section>
-            <h2>Uncategorized</h2>
-            <div class="grid">
+        <section class="category-section">
+            <div class="category-header">
+                <h2>Uncategorized</h2>
+                <span class="tool-count">13 tools</span>
+            </div>
+            <div class="tool-grid">
                 
-                <article>
+                <article class="tool-card" data-search="58 best ai tools to try in 2024 (always up-to-date) - semrush new ai tools are popping up everywhere all the time, which can make it difficult to keep track. in this mega-guide, we'll break down the 58 best ai tools for various use cases to try in 2024. [we upda...">
                     <h3>58 Best AI Tools to Try in 2024 (Always Up-to-Date) - Semrush</h3>
                     <p>New AI tools are popping up everywhere all the time, which can make it difficult to keep track. In this mega-guide, we'll break down the 58 best AI tools for various use cases to try in 2024. [We upda...</p>
-                    <a href="https://www.semrush.com/blog/best-ai-tools/" role="button">Learn More</a>
+                    <a href="https://www.semrush.com/blog/best-ai-tools/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="20 most popular ai tools ranked (september 2024) - exploding topics find out which ai tools are the most used and searched in 2024, based on monthly traffic data from semrush and similarweb. see the market share, growth rate, and description of each tool, from chatgpt...">
                     <h3>20 Most Popular AI Tools Ranked (September 2024) - Exploding Topics</h3>
                     <p>Find out which AI tools are the most used and searched in 2024, based on monthly traffic data from Semrush and Similarweb. See the market share, growth rate, and description of each tool, from ChatGPT...</p>
-                    <a href="https://explodingtopics.com/blog/most-popular-ai-tools" role="button">Learn More</a>
+                    <a href="https://explodingtopics.com/blog/most-popular-ai-tools" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="20 + best generative ai tools in 2024: complete list - geeksforgeeks explore the 20+ best generative ai tools in 2024 with this complete list. discover innovative platforms for content creation, design, code generation, and more, powered by cutting-edge ai technology. ...">
                     <h3>20 + Best Generative AI Tools in 2024: Complete List - GeeksforGeeks</h3>
                     <p>Explore the 20+ best generative AI tools in 2024 with this complete list. Discover innovative platforms for content creation, design, code generation, and more, powered by cutting-edge AI technology. ...</p>
-                    <a href="https://www.geeksforgeeks.org/popular-ai-tools-list/" role="button">Learn More</a>
+                    <a href="https://www.geeksforgeeks.org/popular-ai-tools-list/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="the most popular ai tools of 2024 (and what that even means) here's 2024's ai leaderboard and how chatgpt, canva, gemini, copilot, and more stack up in market share. ... grammarly's new ai tools for students roll out for back-to-school season;">
                     <h3>The most popular AI tools of 2024 (and what that even means)</h3>
                     <p>Here's 2024's AI leaderboard and how ChatGPT, Canva, Gemini, Copilot, and more stack up in market share. ... Grammarly's new AI tools for students roll out for back-to-school season;</p>
-                    <a href="https://www.zdnet.com/article/the-most-popular-ai-tools-of-2024-and-what-that-even-means/" role="button">Learn More</a>
+                    <a href="https://www.zdnet.com/article/the-most-popular-ai-tools-of-2024-and-what-that-even-means/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="best ai tools of 2025 - techradar the tool utilizes artificial intelligence (ai) technology to enhance and restore the quality of photographs. ... to choose the best ai tools, look for the ones that offer features you need, such ...">
                     <h3>Best AI tools of 2025 - TechRadar</h3>
                     <p>The tool utilizes artificial intelligence (AI) technology to enhance and restore the quality of photographs. ... To choose the best AI tools, look for the ones that offer features you need, such ...</p>
-                    <a href="https://www.techradar.com/best/best-ai-tools" role="button">Learn More</a>
+                    <a href="https://www.techradar.com/best/best-ai-tools" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="tom's guide awards 2024: the best ai tools and devices we tested this year artificial intelligence image generators came into their own in 2024, reaching levels of realism not previously possible and even developing the ability to accurately render text on an image.">
                     <h3>Tom's Guide Awards 2024: The best AI tools and devices we tested this year</h3>
                     <p>Artificial Intelligence image generators came into their own in 2024, reaching levels of realism not previously possible and even developing the ability to accurately render text on an image.</p>
-                    <a href="https://www.tomsguide.com/ai/toms-guide-awards-2024-the-best-ai-tools-and-devices-we-tested-this-year" role="button">Learn More</a>
+                    <a href="https://www.tomsguide.com/ai/toms-guide-awards-2024-the-best-ai-tools-and-devices-we-tested-this-year" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="top 10 best ai apps & websites in 2025: free and paid from chatgpt to midjourney, find the best free and paid tools to enhance your creativity, productivity, and more. we earn commissions from brands listed on this site, which influences how listings are...">
                     <h3>Top 10 Best AI Apps & Websites in 2025: Free and Paid</h3>
                     <p>From ChatGPT to Midjourney, find the best free and paid tools to enhance your creativity, productivity, and more. We earn commissions from brands listed on this site, which influences how listings are...</p>
-                    <a href="https://www.top10.com/best-lists/best-ai-apps" role="button">Learn More</a>
+                    <a href="https://www.top10.com/best-lists/best-ai-apps" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="the 14 best ai productivity tools in 2024 - the process hacker discover how ai can transform your daily workflow with these 14 productivity apps that automate, organize, and optimize your tasks. learn about their features, benefits, pricing, and reviews.">
                     <h3>The 14 Best AI Productivity Tools in 2024 - The Process Hacker</h3>
                     <p>Discover how AI can transform your daily workflow with these 14 productivity apps that automate, organize, and optimize your tasks. Learn about their features, benefits, pricing, and reviews.</p>
-                    <a href="https://theprocesshacker.com/blog/ai-productivity-tools/" role="button">Learn More</a>
+                    <a href="https://theprocesshacker.com/blog/ai-productivity-tools/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="the best ai productivity tools in 2025 - zapier discover more than 60 ai apps that will help you work faster and better in 2025. from chatbots and search engines to content creation and automation, zapier reviews and compares the top ai productivit...">
                     <h3>The best AI productivity tools in 2025 - Zapier</h3>
                     <p>Discover more than 60 AI apps that will help you work faster and better in 2025. From chatbots and search engines to content creation and automation, Zapier reviews and compares the top AI productivit...</p>
-                    <a href="https://zapier.com/blog/best-ai-productivity-tools/" role="button">Learn More</a>
+                    <a href="https://zapier.com/blog/best-ai-productivity-tools/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="23 ai productivity tools to revolutionize your workflow - digitalocean boost your work efficiency with ai productivity tools that automate tasks and streamline your daily operations.">
                     <h3>23 AI Productivity Tools to Revolutionize Your Workflow - DigitalOcean</h3>
                     <p>Boost your work efficiency with AI productivity tools that automate tasks and streamline your daily operations.</p>
-                    <a href="https://www.digitalocean.com/resources/articles/ai-productivity-tools" role="button">Learn More</a>
+                    <a href="https://www.digitalocean.com/resources/articles/ai-productivity-tools" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="25 best ai productivity tools to use in 2025 - clickup discover the 25 best ai productivity tools for 2025 that can transform your workflow and supercharge your efficiency.">
                     <h3>25 Best AI Productivity Tools to Use in 2025 - ClickUp</h3>
                     <p>Discover the 25 best AI productivity tools for 2025 that can transform your workflow and supercharge your efficiency.</p>
-                    <a href="https://clickup.com/blog/ai-productivity-tools/" role="button">Learn More</a>
+                    <a href="https://clickup.com/blog/ai-productivity-tools/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="the best open-source ai models: all your free-to-use options ... - zdnet here are the best open-source and free-to-use ai models for text, images, and audio, organized by type, application, and licensing considerations. ... language models are crucial in text-based ...">
                     <h3>The best open-source AI models: All your free-to-use options ... - ZDNET</h3>
                     <p>Here are the best open-source and free-to-use AI models for text, images, and audio, organized by type, application, and licensing considerations. ... Language models are crucial in text-based ...</p>
-                    <a href="https://www.zdnet.com/article/the-best-open-source-ai-models-all-your-free-to-use-options-explained/" role="button">Learn More</a>
+                    <a href="https://www.zdnet.com/article/the-best-open-source-ai-models-all-your-free-to-use-options-explained/" target="_blank" role="button" class="outline">Visit Tool →</a>
+                </article>
+                
+                <article class="tool-card" data-search="the best ai productivity tools in 2025 discover the top 10 ai productivity tools , their use cases, benefits, and how they can enhance your efficiency.">
+                    <h3>The Best AI Productivity Tools in 2025</h3>
+                    <p>Discover the top 10 AI productivity tools , their use cases, benefits, and how they can enhance your efficiency.</p>
+                    <a href="https://blog.webex.com/innovation-ai/the-ai-productivity-tools-shaping-2025/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
             </div>
         </section>
         
-        <section>
-            <h2>Developer Tools</h2>
-            <div class="grid">
+        <section class="category-section">
+            <div class="category-header">
+                <h2>Developer Tools</h2>
+                <span class="tool-count">5 tools</span>
+            </div>
+            <div class="tool-grid">
                 
-                <article>
+                <article class="tool-card" data-search="10 best ai tools for developers 2025 (compared) - codeless 1. github copilot best ai tool for developers. github copilot is the best ai tool for developers. trained on an exhaustive range of billions of code lines, this tool excels in converting natural langu...">
                     <h3>10 Best AI Tools for Developers 2025 (Compared) - Codeless</h3>
                     <p>1. GitHub Copilot Best AI Tool for Developers. GitHub Copilot is the best AI tool for developers. Trained on an exhaustive range of billions of code lines, this tool excels in converting natural langu...</p>
-                    <a href="https://codeless.co/best-ai-tools-for-developers/" role="button">Learn More</a>
+                    <a href="https://codeless.co/best-ai-tools-for-developers/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="12 best ai tools for developers in 2025 (most are free) - ai mojo ai developer tools refer to software that utilizes artificial intelligence technologies like machine learning and natural language processing to assist developers during software development. these to...">
                     <h3>12 Best AI Tools for Developers in 2025 (Most Are Free) - AI Mojo</h3>
                     <p>AI developer tools refer to software that utilizes artificial intelligence technologies like machine learning and natural language processing to assist developers during software development. These to...</p>
-                    <a href="https://aimojo.io/ai-tools-developers/" role="button">Learn More</a>
+                    <a href="https://aimojo.io/ai-tools-developers/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="best ai for coding in 2025 : 25 developer tools to use (or avoid) ai developer tools: conclusions. a tl;dr version of our research. automated code review agents: comparative conclusion. usefulness of comments: while both korbit and ai code review action on github ge...">
                     <h3>Best AI for coding in 2025 : 25 developer tools to use (or avoid)</h3>
                     <p>AI developer tools: Conclusions. A tl;dr version of our research. Automated code review agents: Comparative conclusion. Usefulness of comments: While both Korbit and AI Code Review Action on GitHub ge...</p>
-                    <a href="https://www.pragmaticcoders.com/resources/ai-developer-tools" role="button">Learn More</a>
+                    <a href="https://www.pragmaticcoders.com/resources/ai-developer-tools" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="15 best ai tools for developers [2025] - lambdatest mutable.ai . mutable.ai is a cutting-edge ai-powered platform designed to transform the way developers interact with their codebases. as one of the leading ai tools for developers, it automates the cr...">
                     <h3>15 Best AI Tools for Developers [2025] - LambdaTest</h3>
                     <p>Mutable.ai . Mutable.ai is a cutting-edge AI-powered platform designed to transform the way developers interact with their codebases. As one of the leading AI tools for developers, it automates the cr...</p>
-                    <a href="https://www.lambdatest.com/blog/ai-tools-for-developers/" role="button">Learn More</a>
+                    <a href="https://www.lambdatest.com/blog/ai-tools-for-developers/" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
-                <article>
+                <article class="tool-card" data-search="10 best ai tools for developers in 2025 - pieces.app synk is a cloud-based code analysis tool that helps to locate the vulnerabilities in security and open-source license compliance issues in a developer's code. as one of the top ai tools for developers...">
                     <h3>10 Best AI Tools for Developers in 2025 - pieces.app</h3>
                     <p>Synk is a cloud-based code analysis tool that helps to locate the vulnerabilities in security and open-source license compliance issues in a developer's code. As one of the top AI tools for developers...</p>
-                    <a href="https://pieces.app/blog/top-10-ai-tools-for-developers" role="button">Learn More</a>
+                    <a href="https://pieces.app/blog/top-10-ai-tools-for-developers" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 
             </div>
         </section>
         
     </main>
+
+    <script>
+        // Simple search functionality
+        const searchInput = document.getElementById('search');
+        const toolCards = document.querySelectorAll('.tool-card');
+        const categories = document.querySelectorAll('.category-section');
+
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            
+            toolCards.forEach(card => {
+                const searchText = card.dataset.search;
+                const visible = searchText.includes(searchTerm);
+                card.style.display = visible ? '' : 'none';
+            });
+
+            // Hide empty categories
+            categories.forEach(category => {
+                const visibleTools = category.querySelectorAll('.tool-card[style=""]').length;
+                category.style.display = visibleTools > 0 ? '' : 'none';
+            });
+        });
+    </script>
 </body>
 </html> 

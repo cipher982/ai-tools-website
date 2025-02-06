@@ -1,113 +1,210 @@
 """Web search functionality for finding AI tools."""
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Literal
+from pydantic import BaseModel, Field
 from duckduckgo_search import DDGS
-import re
+from openai import OpenAI
+import json
+import hashlib
+from pathlib import Path
+import os
+from diskcache import Cache
 
 logger = logging.getLogger(__name__)
+client = OpenAI()
 
-def clean_description(text: str) -> str:
-    """Clean and truncate description text."""
-    # Remove extra whitespace and newlines
-    text = re.sub(r"\s+", " ", text).strip()
-    # Truncate to reasonable length
-    return text[:200] + "..." if len(text) > 200 else text
+# Development mode flag - set via environment variable
+DEV_MODE = os.getenv("AI_TOOLS_DEV", "false").lower() == "true"
+# Cache with 24 hour expiry and 1GB size limit
+cache = Cache("dev_cache", size_limit=int(1e9), timeout=60*60*24) if DEV_MODE else None
 
-def search_ai_tools(query: str = "new AI tools 2024", max_results: int = 10) -> List[Dict]:
+def get_cache_key(query: str) -> str:
+    """Generate a cache key from a query."""
+    return hashlib.md5(query.encode()).hexdigest()
+
+def get_cached_results(query: str) -> List[Dict] | None:
+    """Get cached results for a query if they exist."""
+    if not DEV_MODE:
+        return None
+        
+    cache_file = Path(f"{get_cache_key(query)}.json")
+    if cache_file.exists():
+        logger.info(f"Using cached results for query: {query}")
+        with open(cache_file) as f:
+            return json.load(f)
+    return None
+
+def cache_results(query: str, results: List[Dict]) -> None:
+    """Cache results for a query."""
+    if not DEV_MODE:
+        return
+        
+    cache_file = Path(f"{get_cache_key(query)}.json")
+    with open(cache_file, "w") as f:
+        json.dump(results, f, indent=2)
+    logger.info(f"Cached results for query: {query}")
+
+CategoryType = Literal[
+    "Language Models",
+    "Image Generation", 
+    "Audio & Speech",
+    "Video Generation",
+    "Developer Tools",
+    "Other"
+]
+
+class ToolInfo(BaseModel):
+    name: str = Field(..., description="Clean, concise name of the AI tool")
+    description: str = Field(..., description="Clear, focused description under 150 chars")
+    category: CategoryType
+    confidence: int = Field(..., ge=0, le=100, description="Confidence score between 0 and 100")
+
+class AnalysisResult(BaseModel):
+    is_valid_tool: bool = Field(..., description="Whether this is an actual AI tool/product")
+    reason: str = Field(..., description="Brief explanation of the decision")
+    tool_info: ToolInfo | None = Field(None, description="Tool information if is_valid_tool is true")
+
+class AnalysisResponse(BaseModel):
+    results: List[AnalysisResult]
+
+def classify_results(results: List[Dict]) -> List[Dict]:
+    """Use OpenAI to classify search results as valid tools or not."""
+    
+    # Prepare the results for the prompt
+    results_text = "\n\n".join([
+        f"Title: {r['title']}\nURL: {r['href']}\nDescription: {r['body']}"
+        for r in results
+    ])
+    
+    try:
+        completion = client.beta.chat.completions.parse(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": """You are an expert curator of AI tools. 
+Analyze the search results and identify which ones are actual AI tools/products (not articles or lists).
+For valid tools, provide clean names, concise descriptions, and appropriate categorization."""},
+                {"role": "user", "content": f"Here are the results to analyze:\n\n{results_text}"}
+            ],
+            response_format=AnalysisResponse
+        )
+        
+        analysis = completion.choices[0].message.parsed
+        logger.info(f"LLM Analysis: {analysis.model_dump_json(indent=2)}")
+        
+        # Process the results
+        valid_tools = []
+        for idx, (result, analysis_item) in enumerate(zip(results, analysis.results)):
+            if analysis_item.is_valid_tool and analysis_item.tool_info and analysis_item.tool_info.confidence > 80:
+                tool = {
+                    "name": analysis_item.tool_info.name,
+                    "description": analysis_item.tool_info.description,
+                    "url": result["href"],
+                    "category": analysis_item.tool_info.category
+                }
+                valid_tools.append(tool)
+                logger.info(f"Accepted tool: {tool['name']} ({analysis_item.tool_info.confidence}% confidence)")
+            else:
+                logger.info(f"Rejected result: {result['title']} - {analysis_item.reason}")
+        
+        return valid_tools
+    except Exception as e:
+        logger.error(f"Error in LLM classification: {str(e)}", exc_info=True)
+        return []
+
+def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
     """Search for AI tools using DuckDuckGo."""
     tools = []
     logger.info(f"Searching for AI tools with query: {query}")
+    
+    # Check cache first in dev mode
+    if DEV_MODE and query in cache:
+        logger.info(f"Using cached results for query: {query}")
+        return cache[query]
     
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(
                 query,
-                region="wt-wt",  # Worldwide
+                region="wt-wt",
                 safesearch="off",
                 max_results=max_results
             ))
             logger.info(f"Found {len(results)} results for query: {query}")
             
-            # Log the first result to see its structure
-            if results:
-                logger.info(f"Sample result structure: {results[0]}")
-            
-            for r in results:
-                # Log each result for debugging
-                logger.info(f"Processing result: {r}")
-                
-                # Skip if title or link is missing
-                if not r.get("title"):
-                    logger.info("Skipping result: missing title")
-                    continue
-                if not r.get("href"):  # DuckDuckGo uses 'href' instead of 'link'
-                    logger.info("Skipping result: missing href")
-                    continue
-                if not r.get("body"):  # DuckDuckGo uses 'body' instead of 'description'
-                    logger.info("Skipping result: missing body")
-                    continue
-                    
-                # Try to determine category from title/description
-                category = "Uncategorized"
-                title_lower = r["title"].lower()
-                
-                if any(term in title_lower for term in ["chat", "llm", "gpt", "language"]):
-                    category = "Language Models"
-                elif any(term in title_lower for term in ["image", "art", "draw", "stable diffusion"]):
-                    category = "Image Generation"
-                elif any(term in title_lower for term in ["voice", "speech", "audio"]):
-                    category = "Audio & Speech"
-                elif any(term in title_lower for term in ["video", "animation"]):
-                    category = "Video Generation"
-                elif any(term in title_lower for term in ["code", "programming", "developer"]):
-                    category = "Developer Tools"
-                
-                tool = {
-                    "name": r["title"][:100],  # Truncate very long titles
-                    "description": clean_description(r["body"]),
-                    "url": r["href"],  # Use 'href' instead of 'link'
-                    "category": category
-                }
-                
-                logger.info(f"Found tool: {tool['name']} in category: {category}")
-                tools.append(tool)
+            # Process results in batches of 5
+            for i in range(0, len(results), 5):
+                batch = results[i:i+5]
+                valid_tools = classify_results(batch)
+                tools.extend(valid_tools)
+        
+        # Cache results in dev mode
+        if DEV_MODE:
+            cache[query] = tools
+            logger.info(f"Cached results for query: {query}")
     
     except Exception as e:
         logger.error(f"Error searching with query '{query}': {str(e)}", exc_info=True)
     
-    logger.info(f"Processed {len(tools)} valid tools from search results")
     return tools
 
 def find_new_tools() -> List[Dict]:
-    """Find new AI tools using multiple search queries."""
-    queries = [
-        "new AI tools 2024",
-        "best artificial intelligence tools",
-        "AI productivity tools",
-        "AI developer tools",
-        "AI image generation tools",
-        "AI language models tools",
-    ]
+    """Find new AI tools using strategically categorized search queries."""
+    # In dev mode, use a minimal set of queries
+    if DEV_MODE:
+        queries = [
+            # Just two queries for faster development
+            "site:producthunt.com new AI tool launch",
+            "site:github.com new AI tool release"
+        ]
+        logger.info("Running in development mode with reduced query set")
+    else:
+        queries = [
+            # High-value discovery sources
+            "site:producthunt.com new AI tool launch",
+            "site:github.com new AI tool release",
+            "site:huggingface.co/spaces new",
+            "site:replicate.com new model",
+            
+            # Startup and indie sources
+            "indie AI tool launch 2024",
+            "AI startup launch announcement 2024",
+            "new AI tool beta access",
+            
+            # Time-based discovery
+            "launched new AI tool this week",
+            "announced new AI platform today",
+            "released new artificial intelligence tool",
+            
+            # Open source focus
+            "open source AI tool release",
+            "new AI model github release"
+        ]
     
     logger.info(f"Starting search with {len(queries)} queries")
     all_tools = []
     
     for query in queries:
         try:
-            tools = search_ai_tools(query, max_results=5)  # Fewer results per query to avoid duplicates
+            tools = search_ai_tools(query, max_results=10)
             all_tools.extend(tools)
             logger.info(f"Found {len(tools)} tools for query: {query}")
         except Exception as e:
             logger.error(f"Error processing query '{query}': {str(e)}", exc_info=True)
     
-    # Remove duplicates based on URL
+    # Enhanced deduplication using both URL and name similarity
     seen_urls = set()
+    seen_names = set()
     unique_tools = []
     
     for tool in all_tools:
-        if tool["url"] not in seen_urls:
+        name_key = tool["name"].lower()
+        if tool["url"] not in seen_urls and not any(
+            existing_name in name_key or name_key in existing_name
+            for existing_name in seen_names
+        ):
             seen_urls.add(tool["url"])
+            seen_names.add(name_key)
             unique_tools.append(tool)
     
     logger.info(f"Found {len(unique_tools)} unique tools after deduplication")

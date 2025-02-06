@@ -5,26 +5,133 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Tools Collection</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        :root {
+            --spacing: 0.75rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        .header {
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        .header p {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .search-box {
+            margin-bottom: 2rem;
+        }
+        .category-section {
+            margin-bottom: 3rem;
+        }
+        .category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--muted);
+        }
+        .category-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .tool-count {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        .tool-card {
+            background: var(--card-background-color);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .tool-card h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        .tool-card p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--muted);
+            flex-grow: 1;
+        }
+        .tool-card a {
+            margin-top: 1rem;
+            display: inline-block;
+            font-size: 0.9rem;
+        }
+        [data-theme="light"] {
+            --card-background-color: #f8f9fa;
+        }
+        [data-theme="dark"] {
+            --card-background-color: #242424;
+        }
+    </style>
 </head>
 <body>
     <main class="container">
-        <h1>AI Tools Collection</h1>
-        <p>Last updated: {{ last_updated }}</p>
-        
+        <div class="header">
+            <h1>AI Tools Collection</h1>
+            <p>Last updated: {{ last_updated }}</p>
+        </div>
+
+        <div class="search-box">
+            <input type="search" id="search" placeholder="Search tools..." aria-label="Search tools">
+        </div>
+
         {% for category, tools in tools_by_category.items() %}
-        <section>
-            <h2>{{ category }}</h2>
-            <div class="grid">
+        <section class="category-section">
+            <div class="category-header">
+                <h2>{{ category }}</h2>
+                <span class="tool-count">{{ tools|length }} tools</span>
+            </div>
+            <div class="tool-grid">
                 {% for tool in tools %}
-                <article>
+                <article class="tool-card" data-search="{{ tool.name.lower() }} {{ tool.description.lower() }}">
                     <h3>{{ tool.name }}</h3>
                     <p>{{ tool.description }}</p>
-                    <a href="{{ tool.url }}" role="button">Learn More</a>
+                    <a href="{{ tool.url }}" target="_blank" role="button" class="outline">Visit Tool →</a>
                 </article>
                 {% endfor %}
             </div>
         </section>
         {% endfor %}
     </main>
+
+    <script>
+        // Simple search functionality
+        const searchInput = document.getElementById('search');
+        const toolCards = document.querySelectorAll('.tool-card');
+        const categories = document.querySelectorAll('.category-section');
+
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            
+            toolCards.forEach(card => {
+                const searchText = card.dataset.search;
+                const visible = searchText.includes(searchTerm);
+                card.style.display = visible ? '' : 'none';
+            });
+
+            // Hide empty categories
+            categories.forEach(category => {
+                const visibleTools = category.querySelectorAll('.tool-card[style=""]').length;
+                category.style.display = visibleTools > 0 ? '' : 'none';
+            });
+        });
+    </script>
 </body>
 </html> 

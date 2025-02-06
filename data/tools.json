@@ -1,5 +1,5 @@
 {
-    "last_updated": "2025-02-06T19:17:28.276847+00:00",
+    "last_updated": "2025-02-06T21:26:18.544382+00:00",
     "tools": [
         {
             "name": "ChatGPT",
@@ -185,6 +185,18 @@
             "name": "AI Model Tools Comparison How to Choose Between SGLang, Ollama, VLLM ...",
             "description": "In-depth comparison and analysis of popular AI model deployment tools including SGLang, Ollama, VLLM, and LLaMA.cpp, helping developers and users choose the most suitable AI model deployment tool ... ...",
             "url": "https://stable-learn.com/en/ai-model-tools-comparison/",
+            "category": "Language Models"
+        },
+        {
+            "name": "The Best AI Productivity Tools in 2025",
+            "description": "Discover the top 10 AI productivity tools , their use cases, benefits, and how they can enhance your efficiency.",
+            "url": "https://blog.webex.com/innovation-ai/the-ai-productivity-tools-shaping-2025/",
+            "category": "Uncategorized"
+        },
+        {
+            "name": "Large Language Model (LLM) Frameworks and Tools for Natural Language ...",
+            "description": "Haystack is an open source NLP framework to interact with your data using Transformer models and LLMs (GPT-3 and alike).",
+            "url": "https://aimodels.org/open-source-ai-tools/large-language-model-llm-frameworks-tools-natural-language-processing-nlp/",
             "category": "Language Models"
         }
     ]
