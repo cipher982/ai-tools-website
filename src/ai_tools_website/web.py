@@ -4,20 +4,20 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fasthtml import H1
-from fasthtml import H2
-from fasthtml import H5
-from fasthtml import A
-from fasthtml import Div
-from fasthtml import Input
-from fasthtml import P
-from fasthtml import Script
-from fasthtml import Section
-from fasthtml import Span
-from fasthtml import Style
-from fasthtml import Titled
-from fasthtml.core import fast_app
+from fasthtml.common import H1
+from fasthtml.common import H2
+from fasthtml.common import H5
+from fasthtml.common import A
+from fasthtml.common import Div
+from fasthtml.common import Input
+from fasthtml.common import P
+from fasthtml.common import Script
+from fasthtml.common import Section
+from fasthtml.common import Span
+from fasthtml.common import Style
+from fasthtml.common import Titled
 from fasthtml.core import serve
+from fasthtml.fastapp import fast_app
 
 load_dotenv()
 
