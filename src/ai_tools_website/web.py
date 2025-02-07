@@ -4,7 +4,6 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fasthtml.common import H1
 from fasthtml.common import H2
 from fasthtml.common import H5
 from fasthtml.common import A
@@ -142,8 +141,7 @@ def get():
     return Titled(
         "AI Tools Collection",
         Style(styles),
-        H1("AI Tools Collection"),
-        P("A curated collection of AI tools"),
+        P("A curated collection of AI tools, gathered by AI agents."),
         Input({"type": "search", "id": "search", "placeholder": "Search tools..."}),
         *sections,  # Unpack the list of sections
         Script(search_script),

@@ -178,4 +178,4 @@ cython_debug/
 .DS_Store
 
 # FastHTML
-sesskey
+.sesskey
