@@ -3,15 +3,15 @@ version: "3.8"
 services:
   web:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     env_file: 
-      - ../.env
+      - .env
     ports:
       - "${WEB_PORT}:${WEB_PORT}"
     volumes:
-      - ../src:/app/src
-      - ../data:/app/data
+      - ./src:/app/src
+      - ./data:/app/data
     environment:
       - DEV_MODE=true
     healthcheck:
@@ -22,11 +22,11 @@ services:
 
   updater:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.updater
+      context: .
+      dockerfile: Dockerfile.updater
     volumes:
-      - ../data:/app/data
-    env_file: ../.env
+      - ./data:/app/data
+    env_file: .env
     environment:
       - DEV_MODE=true
     profiles:
