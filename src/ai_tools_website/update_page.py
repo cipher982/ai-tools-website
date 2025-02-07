@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import json
 import logging
 from datetime import datetime
 from datetime import timezone
@@ -11,29 +10,13 @@ from typing import List
 from jinja2 import Environment
 from jinja2 import FileSystemLoader
 
+from .data_manager import load_tools
+from .data_manager import save_tools
 from .logging_config import setup_logging
-from .search import find_new_tools
+from .search import DEV_MODE
+from .search import search_ai_tools
 
 logger = logging.getLogger(__name__)
-
-
-def load_tools() -> Dict:
-    """Load tools data from JSON file."""
-    data_path = Path("data/tools.json")
-    if not data_path.exists():
-        logger.error(f"Data file not found at {data_path}")
-        raise FileNotFoundError(f"Data file not found at {data_path}")
-
-    with open(data_path, "r") as f:
-        return json.load(f)
-
-
-def save_tools(tools_data: Dict) -> None:
-    """Save tools data to JSON file."""
-    data_path = Path("data/tools.json")
-    with open(data_path, "w") as f:
-        json.dump(tools_data, f, indent=4)
-    logger.info(f"Saved {len(tools_data['tools'])} tools to {data_path}")
 
 
 def group_tools_by_category(tools: List[Dict]) -> Dict[str, List[Dict]]:
@@ -71,6 +54,31 @@ def generate_page(tools_data: Dict) -> None:
     logger.info(f"Generated HTML page at {output_file}")
 
 
+def find_new_tools() -> List[Dict]:
+    """Find new AI tools using search queries."""
+    queries = (
+        [
+            "site:producthunt.com new AI tool launch",
+            "site:github.com new AI tool release",
+            "site:huggingface.co/spaces new",
+            "site:replicate.com new model",
+        ]
+        if not DEV_MODE
+        else [
+            "site:producthunt.com new AI tool launch",
+            "site:github.com new AI tool release",
+        ]
+    )
+
+    all_tools = []
+    for query in queries:
+        tools = search_ai_tools(query)
+        all_tools.extend(tools)
+        logger.info(f"Found {len(tools)} tools for query: {query}")
+
+    return all_tools
+
+
 def update_tools() -> Dict:
     """Update tools list with new findings."""
     logger.info("Starting tools update process")
@@ -78,26 +86,44 @@ def update_tools() -> Dict:
     logger.info(f"Loaded {len(current_data['tools'])} existing tools")
 
     new_tools = find_new_tools()
-    logger.info(f"Found {len(new_tools)} potential new tools")
+    logger.info(f"Found {len(new_tools)} potential updates")
 
-    # Create a set of existing URLs for deduplication
-    existing_urls = {tool["url"] for tool in current_data["tools"]}
-    added_count = 0
+    # Create a map of existing tools by URL for efficient lookup
+    tools_by_url = {tool["url"]: tool for tool in current_data["tools"]}
 
-    # Add only new tools that aren't already in our list
+    update_count = 0
+    add_count = 0
+
+    # Process updates and additions
     for tool in new_tools:
-        if tool["url"] not in existing_urls:
+        if tool["url"] in tools_by_url:
+            # Update existing tool
+            existing_tool = tools_by_url[tool["url"]]
+            if (
+                tool["name"] != existing_tool["name"]
+                or tool["description"] != existing_tool["description"]
+                or tool["category"] != existing_tool["category"]
+            ):
+                existing_tool.update(tool)
+                update_count += 1
+                logger.info(f"Updated tool: {tool['name']}")
+        else:
+            # Add new tool
             current_data["tools"].append(tool)
-            existing_urls.add(tool["url"])
-            added_count += 1
+            tools_by_url[tool["url"]] = tool
+            add_count += 1
+            logger.info(f"Added new tool: {tool['name']}")
 
-    logger.info(f"Added {added_count} new tools")
+    logger.info(f"Added {add_count} new tools, updated {update_count} existing tools")
 
     # Update last_updated timestamp
     current_data["last_updated"] = datetime.now(timezone.utc).isoformat()
 
     # Save updated data
     save_tools(current_data)
+
+    # Generate new page
+    generate_page(current_data)
 
     return current_data
 

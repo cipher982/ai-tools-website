@@ -5,6 +5,7 @@ import os
 from typing import Dict
 from typing import List
 from typing import Literal
+from typing import Optional
 
 from diskcache import Cache
 from dotenv import load_dotenv
@@ -13,8 +14,9 @@ from pydantic import BaseModel
 from pydantic import Field
 from tavily import TavilyClient
 
-load_dotenv()
+from .data_manager import load_tools
 
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -27,109 +29,150 @@ print(f"DEV_MODE: {DEV_MODE}")
 # Cache with 24 hour expiry and 1GB size limit
 cache = Cache("dev_cache", size_limit=int(1e9), timeout=60 * 60 * 24) if DEV_MODE else None
 
+# Categories must match what we use in tools.json
 CategoryType = Literal[
     "Language Models", "Image Generation", "Audio & Speech", "Video Generation", "Developer Tools", "Other"
 ]
 
-
-class ToolInfo(BaseModel):
-    name: str = Field(description="Clean, concise name of the AI tool")
-    description: str = Field(description="Clear, focused description under 150 chars")
-    category: CategoryType
-    confidence: int = Field(description="Confidence score between 0 and 100")
+UpdateActionType = Literal["add", "update", "skip"]
 
 
-class AnalysisResult(BaseModel):
-    is_valid_tool: bool = Field(description="Whether this is an actual AI tool/product")
-    reason: str = Field(description="Brief explanation of the decision")
-    tool_info: ToolInfo | None = Field(None, description="Tool information if is_valid_tool is true")
+class ToolUpdate(BaseModel):
+    """Represents an update decision for a tool"""
+
+    action: UpdateActionType = Field(
+        description="Action to take: 'add' (new tool), 'update' (modify existing), 'skip' (duplicate/invalid)"
+    )
+    name: str = Field(description="Clean name of the tool")
+    description: str = Field(description="Clear, focused description of what it does")
+    url: str = Field(description="Tool's URL")
+    category: CategoryType = Field(description="Best matching category based on existing categories")
+    confidence: int = Field(description="Confidence in this decision (0-100)")
+    reasoning: str = Field(description="Explanation of the decision and any notable changes/improvements")
 
 
-class AnalysisResponse(BaseModel):
-    results: List[AnalysisResult]
+class SearchAnalysis(BaseModel):
+    """Analysis of search results against existing tools"""
+
+    updates: List[ToolUpdate]
+    suggestions: Optional[List[str]] = Field(
+        None, description="Optional suggestions for improving tool categorization or data quality"
+    )
 
 
-def classify_results(results: List[Dict]) -> List[Dict]:
-    """Use OpenAI to classify search results as valid tools or not."""
+def analyze_search_results(search_results: List[Dict], current_tools: Dict) -> List[Dict]:
+    """Analyze new search results in context of existing tools."""
 
     # Prepare the results for the prompt
-    results_text = "\n\n".join([f"Title: {r['title']}\nURL: {r['href']}\nDescription: {r['body']}" for r in results])
+    results_text = "\n\n".join(
+        [f"Title: {r['title']}\nURL: {r['href']}\nDescription: {r['body']}" for r in search_results]
+    )
 
     try:
-        completion = client.beta.chat.completions.parse(
+        completion = client.chat.completions.parse(
             model="gpt-4o-mini",  # DONT CHANGE THIS
             messages=[
                 {
                     "role": "system",
-                    "content": """You are an expert curator of AI tools. 
-Analyze the search results and identify which ones are actual AI tools/products (not articles or lists).
-For valid tools, provide clean names, concise descriptions, and appropriate categorization.""",
+                    "content": """You are an expert curator of AI tools with deep knowledge of the field.
+Your task is to analyze new search results and decide how to update our tools database.
+
+For each result:
+1. Check if it represents a real AI tool (not an article/list/news)
+2. Compare against our existing tools to avoid duplicates
+3. Look for opportunities to improve existing entries with better descriptions or categorization
+4. Ensure consistent categorization with our existing categories
+5. Maintain high quality standards for names and descriptions
+
+Key principles:
+- Prefer official sources over third-party listings
+- Descriptions should be clear, specific, and under 150 characters
+- Categories should match our existing ones
+- Confidence should reflect certainty about the tool and data quality
+- For updates, only suggest if the new information is clearly better""",
                 },
-                {"role": "user", "content": f"Here are the results to analyze:\n\n{results_text}"},
+                {
+                    "role": "user",
+                    "content": f"""Here is our current tools database:
+{current_tools}
+
+And here are new search results to analyze:
+{results_text}
+
+Please analyze these results and provide structured decisions about how to update our database.
+Focus on quality and consistency with our existing data.""",
+                },
             ],
-            response_format=AnalysisResponse,
+            response_format=SearchAnalysis,
         )
 
         analysis = completion.choices[0].message.parsed
         logger.info(f"LLM Analysis: {analysis.model_dump_json(indent=2)}")
 
-        # Process the results
-        valid_tools = []
-        for idx, (result, analysis_item) in enumerate(zip(results, analysis.results)):
-            if analysis_item.is_valid_tool and analysis_item.tool_info and analysis_item.tool_info.confidence > 80:
-                tool = {
-                    "name": analysis_item.tool_info.name,
-                    "description": analysis_item.tool_info.description,
-                    "url": result["href"],
-                    "category": analysis_item.tool_info.category,
+        # Process the analysis and update tools
+        updates = []
+        for update in analysis.updates:
+            if update.confidence >= 80:  # We could make this threshold configurable
+                tool_data = {
+                    "name": update.name,
+                    "description": update.description,
+                    "url": update.url,
+                    "category": update.category,
                 }
-                valid_tools.append(tool)
-                logger.info(f"Accepted tool: {tool['name']} ({analysis_item.tool_info.confidence}% confidence)")
-            else:
-                logger.info(f"Rejected result: {result['title']} - {analysis_item.reason}")
 
-        return valid_tools
+                if update.action in ["add", "update"]:
+                    updates.append(tool_data)
+                    action_type = "new" if update.action == "add" else "updated"
+                    logger.info(
+                        f"Processed {action_type} tool: {update.name} ({update.confidence}% confidence)\n"
+                        f"Reason: {update.reasoning}"
+                    )
+                else:
+                    logger.info(f"Skipped tool: {update.name}\nReason: {update.reasoning}")
+
+        return updates
+
     except Exception as e:
-        logger.error(f"Error in LLM classification: {str(e)}", exc_info=True)
+        logger.error(f"Error in LLM analysis: {str(e)}", exc_info=True)
         return []
 
 
 def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
     """Search for AI tools using Tavily."""
-    tools = []
     logger.info(f"Searching for AI tools with query: {query}")
 
-    # Check cache first in dev mode
-    if DEV_MODE and query in cache:
-        logger.info(f"Using cached results for query: {query}")
-        return cache[query]
-
     try:
-        # Use Tavily to search with better filtering
-        results = tavily_client.search(
-            query=query,
-            search_depth="basic",
-            max_results=min(max_results, 20),  # Tavily max is 20
-            include_domains=["github.com", "producthunt.com", "huggingface.co", "replicate.com"],
-        )
+        # Check cache first in dev mode for raw Tavily results
+        if DEV_MODE and query in cache:
+            logger.info(f"Using cached Tavily results for query: {query}")
+            tavily_results = cache[query]
+        else:
+            # Use Tavily to search with better filtering
+            results = tavily_client.search(
+                query=query,
+                search_depth="basic",
+                max_results=min(max_results, 20),  # Tavily max is 20
+                include_domains=["github.com", "producthunt.com", "huggingface.co", "replicate.com"],
+            )
 
-        # Process results in batches of 5
-        tavily_results = [{"title": r["title"], "href": r["url"], "body": r["content"]} for r in results["results"]]
+            # Process raw results
+            tavily_results = [{"title": r["title"], "href": r["url"], "body": r["content"]} for r in results["results"]]
 
-        for i in range(0, len(tavily_results), 5):
-            batch = tavily_results[i : i + 5]
-            valid_tools = classify_results(batch)
-            tools.extend(valid_tools)
+            # Cache raw Tavily results in dev mode
+            if DEV_MODE:
+                cache[query] = tavily_results
+                logger.info(f"Cached Tavily results for query: {query}")
 
-        # Cache results in dev mode
-        if DEV_MODE:
-            cache[query] = tools
-            logger.info(f"Cached results for query: {query}")
+        # Always do fresh LLM analysis
+        logger.info(f"Analyzing {len(tavily_results)} results with LLM")
+        tools = analyze_search_results(tavily_results, load_tools())
+        logger.info(f"LLM analysis complete, found {len(tools)} valid tools")
+
+        return tools
 
     except Exception as e:
         logger.error(f"Error searching with query '{query}': {str(e)}", exc_info=True)
-
-    return tools
+        return []
 
 
 def find_new_tools() -> List[Dict]:
