@@ -3,17 +3,25 @@
 import logging
 from typing import Dict, List, Literal
 from pydantic import BaseModel, Field
-from duckduckgo_search import DDGS
 from openai import OpenAI
 from pathlib import Path
 import os
 from diskcache import Cache
+from tavily import TavilyClient
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 
 logger = logging.getLogger(__name__)
-client = OpenAI()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+tavily_client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
 # Development mode flag - set via environment variable
-DEV_MODE = os.getenv("AI_TOOLS_DEV", "false").lower() == "true"
+DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
+print(f"DEV_MODE: {DEV_MODE}")
+
 # Cache with 24 hour expiry and 1GB size limit
 cache = Cache("dev_cache", size_limit=int(1e9), timeout=60*60*24) if DEV_MODE else None
 
@@ -27,14 +35,14 @@ CategoryType = Literal[
 ]
 
 class ToolInfo(BaseModel):
-    name: str = Field(..., description="Clean, concise name of the AI tool")
-    description: str = Field(..., description="Clear, focused description under 150 chars")
+    name: str = Field(description="Clean, concise name of the AI tool")
+    description: str = Field(description="Clear, focused description under 150 chars")
     category: CategoryType
-    confidence: int = Field(..., description="Confidence score between 0 and 100")
+    confidence: int = Field(description="Confidence score between 0 and 100")
 
 class AnalysisResult(BaseModel):
-    is_valid_tool: bool = Field(..., description="Whether this is an actual AI tool/product")
-    reason: str = Field(..., description="Brief explanation of the decision")
+    is_valid_tool: bool = Field(description="Whether this is an actual AI tool/product")
+    reason: str = Field(description="Brief explanation of the decision")
     tool_info: ToolInfo | None = Field(None, description="Tool information if is_valid_tool is true")
 
 class AnalysisResponse(BaseModel):
@@ -85,7 +93,7 @@ For valid tools, provide clean names, concise descriptions, and appropriate cate
         return []
 
 def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
-    """Search for AI tools using DuckDuckGo."""
+    """Search for AI tools using Tavily."""
     tools = []
     logger.info(f"Searching for AI tools with query: {query}")
     
@@ -95,20 +103,33 @@ def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
         return cache[query]
     
     try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(
-                query,
-                region="wt-wt",
-                safesearch="off",
-                max_results=max_results
-            ))
-            logger.info(f"Found {len(results)} results for query: {query}")
-            
-            # Process results in batches of 5
-            for i in range(0, len(results), 5):
-                batch = results[i:i+5]
-                valid_tools = classify_results(batch)
-                tools.extend(valid_tools)
+        # Use Tavily to search with better filtering
+        results = tavily_client.search(
+            query=query,
+            search_depth="basic",
+            max_results=min(max_results, 20),  # Tavily max is 20
+            include_domains=[
+                "github.com",
+                "producthunt.com", 
+                "huggingface.co",
+                "replicate.com"
+            ]
+        )
+        
+        # Process results in batches of 5
+        tavily_results = [
+            {
+                "title": r["title"],
+                "href": r["url"],
+                "body": r["content"]
+            }
+            for r in results["results"]
+        ]
+        
+        for i in range(0, len(tavily_results), 5):
+            batch = tavily_results[i:i+5]
+            valid_tools = classify_results(batch)
+            tools.extend(valid_tools)
         
         # Cache results in dev mode
         if DEV_MODE:
