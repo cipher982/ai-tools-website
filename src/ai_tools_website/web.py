@@ -149,4 +149,8 @@ def get():
 
 
 if __name__ == "__main__":
-    serve()
+    port = os.getenv("WEB_PORT")
+    print(f"Starting server on port {port}")
+    if not port:
+        raise ValueError("WEB_PORT environment variable is not set")
+    serve(port=int(port))

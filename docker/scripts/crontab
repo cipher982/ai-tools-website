@@ -1,0 +1,2 @@
+# Run every 12 hours
+0 */12 * * * /usr/local/bin/run-update.sh 
