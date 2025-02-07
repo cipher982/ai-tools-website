@@ -1,7 +1,7 @@
 [project]
 name = "ai-tools-website"
 version = "0.1.0"
-description = "Collection of AI tooling one can use"
+description = "AI Tools Website"
 requires-python = ">=3.12"
 dependencies = [
     "duckduckgo-search>=7.3.1",
@@ -10,6 +10,8 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "diskcache>=5.6.3",
     "tavily-python>=0.5.0",
+    "python-fasthtml>=0.12.1",
+    "uvicorn",
 ]
 
 [project.optional-dependencies]
@@ -18,6 +20,9 @@ search = [
     "beautifulsoup4>=4.12.3",
     "requests>=2.31.0",
 ]
+
+[project.scripts]
+ai-tools-web = "ai_tools_website.web:serve"
 
 [build-system]
 requires = ["hatchling"]
