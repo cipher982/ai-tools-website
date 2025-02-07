@@ -1,13 +1,17 @@
 """Web search functionality for finding AI tools."""
 
 import logging
-from typing import Dict, List, Literal
-from pydantic import BaseModel, Field
-from openai import OpenAI
 import os
+from typing import Dict
+from typing import List
+from typing import Literal
+
 from diskcache import Cache
-from tavily import TavilyClient
 from dotenv import load_dotenv
+from openai import OpenAI
+from pydantic import BaseModel
+from pydantic import Field
+from tavily import TavilyClient
 
 load_dotenv()
 
