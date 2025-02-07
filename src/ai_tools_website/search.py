@@ -69,7 +69,7 @@ def analyze_search_results(search_results: List[Dict], current_tools: Dict) -> L
     )
 
     try:
-        completion = client.chat.completions.parse(
+        completion = client.beta.chat.completions.parse(
             model="gpt-4o-mini",  # DONT CHANGE THIS
             messages=[
                 {
@@ -155,7 +155,7 @@ def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
                 include_domains=["github.com", "producthunt.com", "huggingface.co", "replicate.com"],
             )
 
-            # Process raw results
+            # Process raw results - standardize the keys
             tavily_results = [{"title": r["title"], "href": r["url"], "body": r["content"]} for r in results["results"]]
 
             # Cache raw Tavily results in dev mode
