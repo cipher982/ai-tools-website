@@ -1,0 +1,111 @@
+:root {
+    --bg-color: #1a1a1a;
+    --card-bg: #2d2d2d;
+    --text-primary: #e0e0e0;
+    --text-secondary: #b0b0b0;
+    --accent: #4a9eff;
+    --border-color: #404040;
+}
+
+body {
+    background: var(--bg-color);
+    margin: 0;
+    padding: 1rem;
+    min-height: 100vh;
+    color: var(--text-primary);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.intro {
+    margin-bottom: 2rem;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+}
+
+.tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.tool-card {
+    background: var(--card-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    border: 1px solid var(--border-color);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.tool-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+}
+
+.tool-card h5 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.tool-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.tool-card a {
+    display: inline-block;
+    margin-top: 1rem;
+    text-decoration: none;
+    color: var(--accent);
+}
+
+.tool-card a:hover {
+    text-decoration: underline;
+}
+
+.category {
+    margin-bottom: 2rem;
+}
+
+.category h2 {
+    margin: 0 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.count {
+    background: var(--accent);
+    color: var(--bg-color);
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+#search {
+    width: 100%;
+    padding: 0.8rem;
+    margin-bottom: 2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: border-color 0.2s ease;
+}
+
+#search:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+#search::placeholder {
+    color: var(--text-secondary);
+} 
