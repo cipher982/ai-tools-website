@@ -18,6 +18,8 @@ services:
       retries: 3
     profiles:
       - prod
+    networks:
+      - default
 
   web-dev:
     build:
@@ -39,6 +41,8 @@ services:
       retries: 3
     profiles:
       - dev
+    networks:
+      - default
 
   updater:
     build:
@@ -53,6 +57,11 @@ services:
       - web
     profiles:
       - scheduled
+    networks:
+      - default
 
 volumes:
-  data: 
+  data:
+
+networks:
+  default: 
