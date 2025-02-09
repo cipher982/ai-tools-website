@@ -11,13 +11,11 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 RUN uv sync
 
-# Copy application code
-COPY src/ ./src/
+# Copy and install application code
+COPY src/ai_tools_website /app/ai_tools_website
+RUN uv pip install -e .
 
-# Create directories
-RUN mkdir -p ./data ./static
+# Create data directory
+RUN mkdir -p ./data
 
-# Copy static files
-COPY src/ai_tools_website/static/* ./static/
-
-CMD ["uv", "run", "python", "src/ai_tools_website/web.py"] 
+CMD ["uv", "run", "python", "ai_tools_website/web.py"] 
