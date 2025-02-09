@@ -8,7 +8,8 @@ services:
     ports:
       - "${WEB_PORT}:${WEB_PORT}"
     volumes:
-      - ./data:/app/data
+      - data:/app/data
+      - ./src:/app/src
     environment:
       - DEV_MODE=false
     healthcheck:
@@ -16,52 +17,18 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    profiles:
-      - prod
-    networks:
-      - default
-
-  web-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    env_file: 
-      - .env
-    ports:
-      - "${WEB_PORT}:${WEB_PORT}"
-    volumes:
-      - ./src:/app/src
-      - ./data:/app/data
-    environment:
-      - DEV_MODE=true
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${WEB_PORT}/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    profiles:
-      - dev
-    networks:
-      - default
 
   updater:
     build:
       context: .
       dockerfile: Dockerfile.updater
     volumes:
-      - ./data:/app/data
+      - data:/app/data
     env_file: .env
     environment:
       - DEV_MODE=true
     depends_on:
       - web
-    profiles:
-      - scheduled
-    networks:
-      - default
 
 volumes:
   data:
-
-networks:
-  default: 

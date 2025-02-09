@@ -23,7 +23,7 @@ RUN uv sync
 # Copy application code and scripts
 COPY src/ ./src/
 COPY data/ ./data/
-COPY docker/scripts/run-update.sh /usr/local/bin/
-COPY docker/scripts/crontab /etc/crontab
+COPY scripts/run-update.sh /usr/local/bin/
+COPY scripts/crontab /etc/crontab
 
 CMD ["/usr/local/bin/supercronic", "/etc/crontab"] 
