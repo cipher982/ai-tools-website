@@ -66,7 +66,7 @@ def category_section(name, tools):
 
 # App setup
 app, rt = fast_app()
-app.mount("/static", StaticFiles(directory="src/ai_tools_website/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @rt("/")
@@ -77,12 +77,12 @@ def get():
     return Titled(
         "AI Tools Collection",
         Container(
-            StyleX("src/ai_tools_website/static/styles.css"),
+            StyleX("static/styles.css"),
             P("A curated collection of AI tools, gathered by AI agents.", _class="intro"),
             Input({"type": "search", "id": "search", "placeholder": "Search tools..."}),
             *sections,
         ),
-        Script(src="static/search.js"),
+        Script(src="/static/search.js"),
     )
 
 

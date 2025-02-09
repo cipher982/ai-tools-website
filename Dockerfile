@@ -14,7 +14,10 @@ RUN uv sync
 # Copy application code
 COPY src/ ./src/
 
-# Create data directory
-RUN mkdir -p ./data
+# Create directories
+RUN mkdir -p ./data ./static
+
+# Copy static files
+COPY src/ai_tools_website/static/* ./static/
 
 CMD ["uv", "run", "python", "src/ai_tools_website/web.py"] 
