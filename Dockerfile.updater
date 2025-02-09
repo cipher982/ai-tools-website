@@ -22,7 +22,6 @@ RUN uv sync
 
 # Copy application code and scripts
 COPY src/ ./src/
-COPY data/ ./data/
 COPY scripts/run-update.sh /usr/local/bin/
 COPY scripts/crontab /etc/crontab
 
