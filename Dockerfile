@@ -8,13 +8,14 @@ RUN pip install uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies and package in editable mode
+# Install dependencies
 RUN uv sync
 
 # Copy application code
 COPY src/ ./src/
+RUN uv pip install -e .
 
 # Create data directory
 RUN mkdir -p ./data
 
-CMD ["uv", "run", "python", "src/ai_tools_website/web.py"] 
+CMD ["uv", "run", "python", "-m", "ai_tools_website.web"] 
