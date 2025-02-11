@@ -4,7 +4,11 @@ import logging
 import os
 from typing import Dict
 
+from dotenv import load_dotenv
+
 from .storage import MinioClient
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

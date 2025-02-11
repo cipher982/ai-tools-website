@@ -15,6 +15,8 @@ from pydantic import Field
 from tavily import TavilyClient
 
 from .data_manager import load_tools
+from .data_manager import save_tools
+from .logging_config import setup_logging
 
 load_dotenv()
 
@@ -232,3 +234,12 @@ def find_new_tools() -> List[Dict]:
 
     logger.info(f"Found {len(unique_tools)} unique tools after deduplication")
     return unique_tools
+
+
+if __name__ == "__main__":
+    setup_logging()
+    tools = find_new_tools()
+    if tools:
+        current = load_tools()
+        current["tools"].extend(tools)
+        save_tools(current)
