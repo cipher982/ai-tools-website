@@ -1,27 +1,28 @@
 """Data management functionality for AI tools."""
 
-import json
 import logging
-from pathlib import Path
+import os
 from typing import Dict
+
+from .storage import MinioClient
 
 logger = logging.getLogger(__name__)
 
+# Initialize Minio client once
+minio_client = MinioClient(
+    endpoint=os.environ["MINIO_ENDPOINT"],
+    access_key=os.environ["MINIO_ACCESS_KEY"],
+    secret_key=os.environ["MINIO_SECRET_KEY"],
+    bucket_name=os.environ["MINIO_BUCKET_NAME"],
+)
+
 
 def load_tools() -> Dict:
-    """Load tools data from JSON file."""
-    data_path = Path("data/tools.json")
-    if not data_path.exists():
-        logger.error(f"Data file not found at {data_path}")
-        raise FileNotFoundError(f"Data file not found at {data_path}")
-
-    with open(data_path, "r") as f:
-        return json.load(f)
+    """Load tools data from Minio storage."""
+    return minio_client.get_tools()
 
 
 def save_tools(tools_data: Dict) -> None:
-    """Save tools data to JSON file."""
-    data_path = Path("data/tools.json")
-    with open(data_path, "w") as f:
-        json.dump(tools_data, f, indent=4)
-    logger.info(f"Saved {len(tools_data['tools'])} tools to {data_path}")
+    """Save tools data to Minio storage."""
+    minio_client.update_tools(tools_data)
+    logger.info(f"Saved {len(tools_data['tools'])} tools to Minio")

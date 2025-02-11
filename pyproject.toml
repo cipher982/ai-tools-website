@@ -10,13 +10,14 @@ dependencies = [
     "tavily-python>=0.5.0",
     "python-fasthtml>=0.12.1",
     "uvicorn",
+    "minio>=7.2.15",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build.targets.wheel]
+[tool.hatch.build]
 packages = ["ai_tools_website"]
 
 [tool.ruff]
