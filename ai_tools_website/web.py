@@ -1,4 +1,3 @@
-import json
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -16,27 +15,22 @@ from fasthtml.common import Section
 from fasthtml.common import Span
 from fasthtml.common import StyleX
 from fasthtml.common import Titled
-from fasthtml.core import serve
 from fasthtml.fastapp import fast_app
 from starlette.staticfiles import StaticFiles
+
+from ai_tools_website.data_manager import load_tools
 
 load_dotenv()
 
 
 # Data loading
 @lru_cache()
-def load_tools():
-    """Load tools from JSON and cache in memory"""
-    tools_file = os.getenv("TOOLS_FILE")
-    if not tools_file:
-        raise ValueError("TOOLS_FILE environment variable is not set")
-    if not Path(tools_file).exists():
-        raise FileNotFoundError(f"Tools file not found at {tools_file}")
-
-    data = json.loads(Path(tools_file).read_text())
+def get_tools_by_category():
+    """Load tools from Minio and organize by category"""
+    data = load_tools()
     tools_by_category = {}
     for tool in data["tools"]:
-        category = tool["category"]
+        category = tool.get("category", "Missing")
         if category not in tools_by_category:
             tools_by_category[category] = []
         tools_by_category[category].append(tool)
@@ -71,7 +65,7 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 
 @rt("/")
 def get():
-    tools_by_category = load_tools()
+    tools_by_category = get_tools_by_category()
     sections = [category_section(cat, tools) for cat, tools in tools_by_category.items()]
 
     return Titled(
@@ -86,9 +80,10 @@ def get():
     )
 
 
+# For direct script execution
 if __name__ == "__main__":
-    port = os.getenv("WEB_PORT")
+    import uvicorn
+
+    port = int(os.getenv("WEB_PORT", "8000"))
     print(f"Starting server on port {port}")
-    if not port:
-        raise ValueError("WEB_PORT environment variable is not set")
-    serve(port=int(port))
+    uvicorn.run("ai_tools_website.web:app", host="0.0.0.0", port=port, reload=True)
