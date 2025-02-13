@@ -12,7 +12,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync
 
 # Copy and install application code
-COPY src/ai_tools_website /app/ai_tools_website
+COPY ai_tools_website /app/ai_tools_website
 RUN uv pip install -e .
 
 # Create data directory

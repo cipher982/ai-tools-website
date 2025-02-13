@@ -21,7 +21,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync
 
 # Copy application code and scripts
-COPY src/ ./src/
+COPY ai_tools_website/ ./ai_tools_website/
 COPY scripts/run-update.sh /usr/local/bin/
 COPY scripts/crontab /etc/crontab
 
