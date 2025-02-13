@@ -11,11 +11,11 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 RUN uv sync
 
-# Copy and install application code
-COPY ai_tools_website /app/ai_tools_website
-RUN uv pip install -e .
+# Copy application code
+COPY ai_tools_website /app/ai_tools_website/
 
 # Create data directory
 RUN mkdir -p ./data
 
-CMD ["uv", "run", "python", "ai_tools_website/web.py"] 
+# Use shell form to allow environment variable expansion
+CMD uv run uvicorn "ai_tools_website.web:app" --host "0.0.0.0" --port "$WEB_PORT" 

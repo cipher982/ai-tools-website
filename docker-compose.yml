@@ -9,7 +9,7 @@ services:
       - "${WEB_PORT}:${WEB_PORT}"
     volumes:
       - data:/app/data
-      - ./src:/app/src
+      - ./ai_tools_website:/app/ai_tools_website
     environment:
       - DEV_MODE=false
     healthcheck:

@@ -20,8 +20,10 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 RUN uv sync
 
-# Copy application code and scripts
+# Copy application code and install package
 COPY ai_tools_website/ ./ai_tools_website/
+
+# Copy scripts
 COPY scripts/run-update.sh /usr/local/bin/
 COPY scripts/crontab /etc/crontab
 
