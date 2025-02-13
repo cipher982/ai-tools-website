@@ -4,50 +4,41 @@ A modern Python web application for aggregating and browsing AI tools. Built wit
 
 ## Overview
 
-The AI Tools Website aggregates various AI tools and presents them in a responsive, searchable interface. Key features include:
+The AI Tools Website aggregates various AI tools and presents them in a responsive, searchable interface. Recent refactoring has separated core functionalities into distinct modules—web, search, logging, data management, and storage—to better organize and scale the application.
 
-- **Modern Tech Stack:**
-  - FastHTML for server-side rendering
-  - OpenAI and Tavily integration for enhanced search
-  - Minio S3-compatible storage
-  - UV for Python dependency management
+## Key Features
 
-- **Web Interface:**
-  - Real-time client-side search
-  - Responsive grid layout
-  - Category-based organization
-  - Clean, modern design
+- **Modular Architecture:** Separation of concerns across data processing, logging, search, and storage.
+- **Modern Tech Stack:** Built with FastHTML for server-side rendering.
+- **Enhanced Search:** AI-powered search with support for OpenAI and Tavily integrations.
+- **Flexible Storage:** Supports both local storage and Minio S3-compatible storage.
+- **Robust Logging:** Improved logging configuration for easier debugging and monitoring.
+- **Efficient Dependency Management:** UV used for dependency synchronization and task execution.
 
 ## Project Structure
 
 ```
 ai_tools_website/
-├── __init__.py
-├── config.py              # Configuration settings
-├── data_manager.py        # Data processing and validation
-├── logging_config.py      # Logging setup
-├── search.py             # AI-powered search implementation
-├── storage.py            # Storage interface (Minio/local)
+├── __init__.py          # Package initializer
+├── config.py            # Application configuration settings
+├── data_manager.py      # Data processing and validation
+├── logging_config.py    # Logging configuration
+├── search.py            # AI-powered search implementation
+├── storage.py           # Storage interfaces (local/Minio)
 ├── web.py               # FastHTML web server
-└── static/              # CSS and client-side JS
+└── static/              # Client-side assets (CSS, JS, images)
 ```
 
 ## How It Works
 
-1. **Web Interface:**
-   - FastHTML server (`web.py`) provides a modern, responsive UI
-   - Client-side search for instant filtering
-   - Category-based organization of tools
-
-2. **Data Management:**
-   - AI-powered search aggregates tool data
-   - Flexible storage backend (local or Minio)
-   - Automatic categorization and deduplication
-
-3. **Development:**
-   - UV manages dependencies for consistent environments
-   - Environment variables for easy configuration
-   - Comprehensive logging for debugging
+1. **Web Interface:** 
+   - The FastHTML server (web.py) renders a responsive UI with real-time client-side search.
+2. **Data Management & Search:** 
+   - Data is processed and validated in data_manager.py.
+   - search.py leverages AI integrations to provide enhanced search functionality.
+3. **Storage & Logging:** 
+   - storage.py handles file storage, supporting local and Minio backends.
+   - logging_config.py sets up comprehensive logging for monitoring and debugging.
 
 ## Quick Start
 
@@ -64,7 +55,7 @@ cp .env.example .env
 # Run the web server
 uv run python -m ai_tools_website.web
 
-# In a separate terminal, run the updater
+# Run background search/updater
 uv run python -m ai_tools_website.search
 ```
 
@@ -80,13 +71,14 @@ Key environment variables:
 
 See `.env.example` for all options.
 
-## Future Improvements
+## Recent Improvements
 
-- **Enhanced Search:** Implement more AI-powered search features
-- **Content Filtering:** Improve result relevance and filtering
-- **Admin Interface:** Add tool management UI
-- **API:** RESTful endpoints for programmatic access
-- **Analytics:** Track popular searches and tools
+- Refactored the codebase to separate concerns:
+  - data_manager.py now handles data processing and validation.
+  - search.py is refactored for clarity and integration with AI services.
+  - Improved logging configuration in logging_config.py.
+  - Enhanced storage interface in storage.py to support multiple backends.
+- Adopted UV for dependency management and task execution best practices.
 
 ## Deployment
 

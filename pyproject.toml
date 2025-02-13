@@ -11,6 +11,8 @@ dependencies = [
     "python-fasthtml>=0.12.1",
     "uvicorn",
     "minio>=7.2.15",
+    "httpx>=0.28.1",
+    "beautifulsoup4>=4.13.3",
 ]
 
 [build-system]

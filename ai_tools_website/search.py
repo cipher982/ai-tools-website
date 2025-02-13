@@ -6,7 +6,10 @@ from typing import Dict
 from typing import List
 from typing import Literal
 from typing import Optional
+from urllib.parse import urlparse
 
+import httpx
+from bs4 import BeautifulSoup
 from diskcache import Cache
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -62,84 +65,136 @@ class SearchAnalysis(BaseModel):
     )
 
 
-def analyze_search_results(search_results: List[Dict], current_tools: Dict) -> List[Dict]:
-    """Analyze new search results in context of existing tools."""
-
-    # Prepare the results for the prompt
-    results_text = "\n\n".join(
-        [f"Title: {r['title']}\nURL: {r['href']}\nDescription: {r['body']}" for r in search_results]
-    )
-
+async def analyze_page_content(*, url: str, title: str, content: str) -> Optional[Dict]:
+    """Analyze actual page content to verify and enrich tool data."""
     try:
         completion = client.beta.chat.completions.parse(
             model="gpt-4o-mini",  # DONT CHANGE THIS
             messages=[
                 {
                     "role": "system",
-                    "content": """You are an expert curator of AI tools with deep knowledge of the field.
-Your task is to analyze new search results and decide how to update our tools database.
+                    "content": """You are an expert AI tool analyst.
+Your task is to verify if a webpage actually represents a real AI tool by analyzing its content.
 
-For each result:
-1. Check if it represents a real AI tool (not an article/list/news)
-2. Compare against our existing tools to avoid duplicates
-3. Look for opportunities to improve existing entries with better descriptions or categorization
-4. Ensure consistent categorization with our existing categories
-5. Maintain high quality standards for names and descriptions
+Key verification points:
+1. Is this a direct tool/product page (not a list, marketplace, or news article)?
+2. Can you identify clear information about what the tool does?
+3. Is there evidence this is a real, working product (not just an announcement or concept)?
 
-Key principles:
-- Prefer official sources over third-party listings
-- Descriptions should be clear, specific, and under 150 characters
-- Categories should match our existing ones
-- Confidence should reflect certainty about the tool and data quality
-- For updates, only suggest if the new information is clearly better""",
+If verified, extract key information in a clean, consistent format.""",
                 },
                 {
                     "role": "user",
-                    "content": f"""Here is our current tools database:
-{current_tools}
+                    "content": f"""Please analyze this webpage content:
 
-And here are new search results to analyze:
-{results_text}
+URL: {url}
+Title: {title}
 
-Please analyze these results and provide structured decisions about how to update our database.
-Focus on quality and consistency with our existing data.""",
+Content:
+{content[:8000]}  # First 8K chars
+
+Verify if this is a real AI tool page and extract key information if it is.""",
                 },
             ],
             response_format=SearchAnalysis,
         )
 
         analysis = completion.choices[0].message.parsed
-        logger.info(f"LLM Analysis: {analysis.model_dump_json(indent=2)}")
 
-        # Process the analysis and update tools
-        updates = []
+        # Only return if we're very confident this is a real tool page
         for update in analysis.updates:
-            if update.confidence >= 80:  # We could make this threshold configurable
-                tool_data = {
+            if update.confidence >= 90 and update.action == "add":
+                return {
                     "name": update.name,
                     "description": update.description,
-                    "url": update.url,
-                    "category": update.category,
+                    "url": url,  # Use the final URL after redirects
                 }
 
-                if update.action in ["add", "update"]:
-                    updates.append(tool_data)
-                    action_type = "new" if update.action == "add" else "updated"
-                    logger.info(
-                        f"Processed {action_type} tool: {update.name} ({update.confidence}% confidence)\n"
-                        f"Reason: {update.reasoning}"
-                    )
-                else:
-                    logger.info(f"Skipped tool: {update.name}\nReason: {update.reasoning}")
+        return None
 
+    except Exception as e:
+        logger.error(f"Error analyzing page content: {str(e)}", exc_info=True)
+        return None
+
+
+async def verify_and_enrich_tool(url: str) -> Optional[Dict]:
+    """Visit the URL and verify it's actually a tool's page."""
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
+            # Get the actual page
+            response = await client.get(url)
+
+            # Check if we got redirected to a different page
+            final_url = str(response.url)
+
+            # Skip if we landed on a listing/search page
+            parsed = urlparse(final_url)
+            if any(x in parsed.path.lower() for x in ["/search", "/category", "/list", "/tools", "/browse"]):
+                logger.info(f"Skipping listing page: {final_url}")
+                return None
+
+            # Parse the page content
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # Let GPT analyze the actual page content
+            return await analyze_page_content(
+                url=final_url, title=soup.title.text if soup.title else "", content=soup.get_text()
+            )
+
+    except Exception as e:
+        logger.error(f"Failed to verify tool URL {url}: {str(e)}")
+        return None
+
+
+async def analyze_search_results(search_results: List[Dict], current_tools: Dict) -> List[Dict]:
+    """Analyze new search results in context of existing tools."""
+    updates = []
+
+    # First pass with current logic to filter obvious non-tools
+    results_text = "\n\n".join(
+        [f"Title: {r['title']}\nURL: {r['href']}\nDescription: {r['body']}" for r in search_results]
+    )
+
+    try:
+        # Initial analysis to filter obvious non-tools
+        completion = client.beta.chat.completions.parse(
+            model="gpt-4o-mini",  # DONT CHANGE THIS
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an expert curator of AI tools.
+                    Your task is to do an initial filter of search results to identify potential AI tools.""",
+                },
+                {
+                    "role": "user",
+                    "content": f"""Here are search results to analyze\n{results_text}\n
+                    Please identify which results likely represent actual AI tools (not articles/lists).""",
+                },
+            ],
+            response_format=SearchAnalysis,
+        )
+
+        initial_analysis = completion.choices[0].message.parsed
+
+        # Verify promising candidates by visiting their pages
+        for update in initial_analysis.updates:
+            if update.confidence >= 80 and update.action == "add":
+                verified = await verify_and_enrich_tool(update.url)
+                if verified:
+                    updates.append(verified)
+                    logger.info(f"Verified and added tool: {verified['name']} ({update.url})")
+                else:
+                    logger.info(f"Failed to verify tool: {update.url}")
+            else:
+                logger.info(f"Skipping tool: {update.url} ({update.confidence}% confident)")
         return updates
 
     except Exception as e:
-        logger.error(f"Error in LLM analysis: {str(e)}", exc_info=True)
+        logger.error(f"Error in search analysis: {str(e)}", exc_info=True)
         return []
 
 
-def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
+async def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
     """Search for AI tools using Tavily."""
     logger.info(f"Searching for AI tools with query: {query}")
 
@@ -167,7 +222,7 @@ def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
 
         # Always do fresh LLM analysis
         logger.info(f"Analyzing {len(tavily_results)} results with LLM")
-        tools = analyze_search_results(tavily_results, load_tools())
+        tools = await analyze_search_results(tavily_results, load_tools())
         logger.info(f"LLM analysis complete, found {len(tools)} valid tools")
 
         return tools
@@ -177,7 +232,7 @@ def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
         return []
 
 
-def find_new_tools() -> List[Dict]:
+async def find_new_tools() -> List[Dict]:
     """Find new AI tools using strategically categorized search queries."""
     # In dev mode, use a minimal set of queries
     if DEV_MODE:
@@ -212,7 +267,7 @@ def find_new_tools() -> List[Dict]:
 
     for query in queries:
         try:
-            tools = search_ai_tools(query, max_results=10)
+            tools = await search_ai_tools(query, max_results=10)
             all_tools.extend(tools)
             logger.info(f"Found {len(tools)} tools for query: {query}")
         except Exception as e:
@@ -237,8 +292,10 @@ def find_new_tools() -> List[Dict]:
 
 
 if __name__ == "__main__":
+    import asyncio
+
     setup_logging()
-    tools = find_new_tools()
+    tools = asyncio.run(find_new_tools())
     if tools:
         current = load_tools()
         current["tools"].extend(tools)

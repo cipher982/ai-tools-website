@@ -12,7 +12,7 @@ def setup_logging(log_level: str = "INFO") -> None:
     log_dir.mkdir(exist_ok=True)
 
     # Configure logging format
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
 
     # File handler for all logs
     file_handler = logging.FileHandler(log_dir / "ai_tools.log")

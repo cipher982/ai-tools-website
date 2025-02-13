@@ -46,7 +46,9 @@ class MinioClient:
                 self.bucket_name,
                 "tools.json",
             )
-            return json.loads(data.read())
+            response = json.loads(data.read())
+            logger.info(f"Loaded {len(response['tools']):,} tools from Minio")
+            return response
         except S3Error as e:
             if "NoSuchKey" in str(e):
                 logger.info("No tools.json found, initializing empty list")
