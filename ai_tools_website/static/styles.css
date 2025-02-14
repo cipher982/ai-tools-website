@@ -108,4 +108,19 @@ body {
 
 #search::placeholder {
     color: var(--text-secondary);
+}
+
+.github-corner {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+}
+
+.github-corner img {
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.github-corner:hover img {
+    opacity: 1;
 } 

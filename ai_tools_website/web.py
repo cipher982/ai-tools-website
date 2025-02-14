@@ -8,6 +8,7 @@ from fasthtml.common import H5
 from fasthtml.common import A
 from fasthtml.common import Container
 from fasthtml.common import Div
+from fasthtml.common import Img
 from fasthtml.common import Input
 from fasthtml.common import P
 from fasthtml.common import Script
@@ -16,7 +17,6 @@ from fasthtml.common import Span
 from fasthtml.common import StyleX
 from fasthtml.common import Titled
 from fasthtml.fastapp import fast_app
-from starlette.staticfiles import StaticFiles
 
 from ai_tools_website.data_manager import load_tools
 
@@ -59,8 +59,7 @@ def category_section(name, tools):
 
 
 # App setup
-app, rt = fast_app()
-app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
 
 
 @rt("/")
@@ -72,11 +71,22 @@ def get():
         "AI Tools Collection",
         Container(
             StyleX(str(Path(__file__).parent / "static/styles.css")),
+            Div(
+                A(
+                    {
+                        "href": "https://github.com/cipher982/ai-tools-website",
+                        "target": "_blank",
+                        "_class": "github-link",
+                    },
+                    Img({"src": "github-mark-white.svg", "alt": "GitHub", "width": "32", "height": "32"}),
+                ),
+                _class="github-corner",
+            ),
             P("A curated collection of AI tools, gathered by AI agents.", _class="intro"),
             Input({"type": "search", "id": "search", "placeholder": "Search tools..."}),
             *sections,
         ),
-        Script(src="/static/search.js"),
+        Script(src="search.js"),
     )
 
 
