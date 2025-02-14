@@ -73,6 +73,16 @@ class SearchAnalysis(BaseModel):
     )
 
 
+class DuplicateStatus(BaseModel):
+    """Result of duplicate analysis"""
+
+    status: Literal["skip", "update", "new"] = Field(
+        description="Whether to skip, update existing record, or process as new"
+    )
+    reasoning: str = Field(description="Explanation for the decision")
+    confidence: int = Field(description="Confidence in decision (0-100)")
+
+
 async def analyze_page_content(*, url: str, title: str, content: str, current_tools: Dict) -> Optional[Dict]:
     """Analyze actual page content to verify and enrich tool data."""
     try:
@@ -278,6 +288,17 @@ async def filter_results(search_results: List[Dict]) -> List[ToolUpdate]:
 async def verify_tool(candidate: ToolUpdate, current_tools: Dict) -> Optional[Dict]:
     """Verify and enrich a potential tool."""
     try:
+        # First check if this is a duplicate
+        dup_status = await check_duplicate_status(candidate, current_tools)
+        if dup_status.status == "skip":
+            logger.info(f"Skipping {candidate.name}: {dup_status.reasoning}")
+            return None
+        elif dup_status.status == "update":
+            logger.info(f"Will update {candidate.name}: {dup_status.reasoning}")
+            # Continue with verification to get fresh data
+        else:
+            logger.info(f"Processing new tool: {candidate.name}")
+
         async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as http_client:
             response = await http_client.get(candidate.url)
             final_url = str(response.url)
@@ -355,18 +376,21 @@ When analyzing new tools:
 
 
 def deduplicate_tools(tools: List[Dict]) -> List[Dict]:
-    """Remove duplicate tools based on URL and name similarity."""
+    """Remove duplicate tools based on exact URL matches (case insensitive).
+
+    Args:
+        tools: List of tool dictionaries
+
+    Returns:
+        List of tools with duplicates removed, keeping first occurrence
+    """
     seen_urls = set()
-    seen_names = set()
     unique_tools = []
 
     for tool in tools:
-        name_key = tool["name"].lower()
-        if tool["url"] not in seen_urls and not any(
-            existing_name in name_key or name_key in existing_name for existing_name in seen_names
-        ):
-            seen_urls.add(tool["url"])
-            seen_names.add(name_key)
+        url = tool["url"].lower()
+        if url not in seen_urls:
+            seen_urls.add(url)
             unique_tools.append(tool)
 
     return unique_tools
@@ -417,16 +441,15 @@ async def find_new_tools() -> List[Dict]:
     verified = [v for v in verified if v]  # Remove None results
     logger.info(f"Verified {len(verified)} tools")
 
-    # Deduplicate and save
-    unique_tools = deduplicate_tools(verified)
-    if unique_tools:
-        current_tools["tools"].extend(unique_tools)
+    # Save verified tools (duplicates already handled)
+    if verified:
+        current_tools["tools"].extend(verified)
         save_tools(current_tools)
-        logger.info(f"Added {len(unique_tools)} unique tools")
+        logger.info(f"Added {len(verified)} tools")
 
     logger.dedent()
     logger.info("Tool discovery complete")
-    return unique_tools
+    return verified
 
 
 async def recategorize_all_tools() -> None:
@@ -469,11 +492,184 @@ Current Category: {tool.get('category', 'None')}
     logger.info("Recategorization complete!")
 
 
+async def check_duplicate_status(
+    candidate: ToolUpdate,
+    current_tools: Dict[str, List[Dict]],
+) -> DuplicateStatus:
+    """Check if a tool candidate is a duplicate and whether it should be updated.
+
+    Returns decision on whether to skip, update, or process as new.
+    """
+    # First check for exact URL matches
+    existing = None
+    for tool in current_tools["tools"]:
+        if tool["url"].lower() == candidate.url.lower():
+            existing = tool
+            break
+
+    # If no URL match, check for name similarity
+    if not existing:
+        candidate_name = candidate.name.lower()
+        for tool in current_tools["tools"]:
+            if candidate_name == tool["name"].lower():
+                existing = tool
+                break
+
+    if not existing:
+        return DuplicateStatus(status="new", reasoning="No matching tool found in database", confidence=100)
+
+    # If we found a potential match, use LLM to compare
+    completion = client.beta.chat.completions.parse(
+        model=MODEL_NAME,
+        messages=[
+            {
+                "role": "system",
+                "content": """You are an expert at analyzing AI tools.
+Your task is to compare a candidate tool entry against an existing database record
+and decide whether to skip it or update the existing record.""",
+            },
+            {
+                "role": "user",
+                "content": f"""Please compare these two tool entries.
+
+Decide if the candidate offers enough improvements to warrant updating the existing record.
+
+EXISTING RECORD:
+Name: {existing["name"]}
+Description: {existing["description"]}
+URL: {existing["url"]}
+Category: {existing.get("category", "Other")}
+
+CANDIDATE:
+Name: {candidate.name}
+Description: {candidate.description}
+URL: {candidate.url}
+Category: {candidate.category}
+
+Decide whether to:
+1. SKIP - No substantial differences
+2. UPDATE - Candidate has better/newer information""",
+            },
+        ],
+        response_format=DuplicateStatus,
+    )
+
+    return completion.choices[0].message.parsed
+
+
+async def deduplicate_database() -> None:
+    """One-time cleanup to deduplicate the tools database using the new duplicate detection logic."""
+    logger.info("Starting database deduplication...")
+    current = load_tools()
+    total = len(current["tools"])
+    logger.info(f"Processing {total} tools")
+
+    # Convert existing tools to ToolUpdate format for comparison
+    cleaned_tools = []
+    seen_urls = set()
+
+    for i, tool in enumerate(current["tools"], 1):
+        if tool["url"].lower() in seen_urls:
+            logger.info(f"Skipping duplicate URL: {tool['url']}")
+            continue
+
+        candidate = ToolUpdate(
+            action="add",
+            name=tool["name"],
+            description=tool["description"],
+            url=tool["url"],
+            category=tool.get("category", "Other"),
+            confidence=100,
+            reasoning="Existing tool",
+        )
+
+        # Create temporary tools dict without current tool for comparison
+        temp_tools = {"tools": [t for t in current["tools"] if t["url"].lower() != tool["url"].lower()]}
+
+        dup_status = await check_duplicate_status(candidate, temp_tools)
+        if dup_status.status == "new":
+            cleaned_tools.append(tool)
+            seen_urls.add(tool["url"].lower())
+            logger.info(f"Keeping tool {i}/{total}: {tool['name']}")
+        else:
+            logger.info(f"Found duplicate {i}/{total}: {tool['name']} - {dup_status.reasoning}")
+
+    # Save cleaned database
+    logger.info(f"Removed {total - len(cleaned_tools)} duplicates")
+    current["tools"] = cleaned_tools
+    save_tools(current)
+    logger.info("Deduplication complete!")
+
+
+async def smart_deduplicate_tools(tools: List[Dict]) -> List[Dict]:
+    """Smart deduplication of tools using LLM comparison.
+
+    Args:
+        tools: List of tool dictionaries to deduplicate
+
+    Returns:
+        Deduplicated list of tools, keeping best version of each
+    """
+    logger.info(f"Smart deduplicating {len(tools)} tools")
+
+    # First pass: quick URL deduplication
+    url_deduped = []
+    seen_urls = set()
+    for tool in tools:
+        url = tool["url"].lower()
+        if url not in seen_urls:
+            seen_urls.add(url)
+            url_deduped.append(tool)
+        else:
+            logger.info(f"URL duplicate found: {tool['url']}")
+
+    logger.info(f"URL deduplication: {len(tools)} -> {len(url_deduped)} tools")
+
+    # Second pass: LLM comparison
+    cleaned_tools = []
+    logger.info("Starting LLM comparison phase...")
+
+    for i, tool in enumerate(url_deduped, 1):
+        logger.info(f"Processing tool {i}/{len(url_deduped)}: {tool['name']}")
+
+        # Compare against already cleaned tools
+        candidate = ToolUpdate(
+            action="add",
+            name=tool["name"],
+            description=tool["description"],
+            url=tool["url"],
+            category=tool.get("category", "Other"),
+            confidence=100,
+            reasoning="Existing tool",
+        )
+
+        if not cleaned_tools:  # First tool, no comparisons needed
+            cleaned_tools.append(tool)
+            logger.info("First tool, automatically keeping")
+            continue
+
+        temp_tools = {"tools": cleaned_tools}
+        logger.info(f"Comparing against {len(cleaned_tools)} existing tools")
+        status = await check_duplicate_status(candidate, temp_tools)
+
+        if status.status == "new":
+            cleaned_tools.append(tool)
+            logger.info(f"Keeping new tool: {tool['name']}")
+        else:
+            logger.info(f"Found duplicate: {tool['name']} - {status.reasoning}")
+
+    logger.info(f"LLM comparison complete: {len(url_deduped)} -> {len(cleaned_tools)} tools")
+    return cleaned_tools
+
+
 if __name__ == "__main__":
     setup_logging()
 
-    # Check if we should recategorize
-    if os.getenv("RECATEGORIZE", "").lower() == "true":
+    # Check run mode
+    if os.getenv("DEDUPLICATE", "").lower() == "true":
+        logger.info("Running one-time deduplication...")
+        asyncio.run(deduplicate_database())
+    elif os.getenv("RECATEGORIZE", "").lower() == "true":
         logger.info("Running recategorization...")
         asyncio.run(recategorize_all_tools())
     else:
