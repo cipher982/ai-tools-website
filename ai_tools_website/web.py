@@ -80,6 +80,11 @@ def get():
     )
 
 
+@rt("/health")
+def health():
+    return {"status": "ok"}
+
+
 # For direct script execution
 if __name__ == "__main__":
     import uvicorn
