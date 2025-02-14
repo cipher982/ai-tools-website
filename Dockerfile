@@ -19,6 +19,8 @@ RUN mkdir -p ./data
 # Use shell form to allow environment variable expansion
 CMD echo "=== Directory Structure ===" && \
     ls -la /app && \
+    echo "=== ai_tools_website Contents ===" && \
+    ls -la /app/ai_tools_website && \
     echo "=== Python Path ===" && \
     python -c "import sys; print('\n'.join(sys.path))" && \
     echo "=== Starting App ===" && \
