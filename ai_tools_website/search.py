@@ -19,11 +19,15 @@ from tavily import TavilyClient
 
 from .data_manager import load_tools
 from .data_manager import save_tools
+from .logging_config import IndentLogger
 from .logging_config import setup_logging
 
 load_dotenv()
 
-logger = logging.getLogger(__name__)
+# Set up logger with indentation support
+base_logger = logging.getLogger(__name__)
+logger = IndentLogger(base_logger)
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 tavily_client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
@@ -51,7 +55,7 @@ class ToolUpdate(BaseModel):
     name: str = Field(description="Clean name of the tool")
     description: str = Field(description="Clear, focused description of what it does")
     url: str = Field(description="Tool's URL")
-    category: CategoryType = Field(description="Best matching category based on existing categories")
+    category: str = Field(description="Category for this tool, either existing or new if strongly justified")
     confidence: int = Field(description="Confidence in this decision (0-100)")
     reasoning: str = Field(description="Explanation of the decision and any notable changes/improvements")
 
@@ -65,23 +69,44 @@ class SearchAnalysis(BaseModel):
     )
 
 
-async def analyze_page_content(*, url: str, title: str, content: str) -> Optional[Dict]:
+async def analyze_page_content(*, url: str, title: str, content: str, current_tools: Dict) -> Optional[Dict]:
     """Analyze actual page content to verify and enrich tool data."""
     try:
+        logger.info("Analyzing content")
+        # Organize current tools by category
+        tools_by_category = {}
+        for tool in current_tools["tools"]:
+            cat = tool.get("category", "Other")
+            if cat not in tools_by_category:
+                tools_by_category[cat] = []
+            tools_by_category[cat].append(tool)
+
+        # Build rich context with full tool details
+        categories_text = []
+        for cat, tools in sorted(tools_by_category.items()):
+            tool_details = [f"  - {t['name']}: {t['description']}" for t in tools]
+            categories_text.append(f"{cat} ({len(tools)} tools):\n" + "\n".join(tool_details))
+
+        categories_context = "\n\n".join(categories_text)
+
         completion = client.beta.chat.completions.parse(
             model="gpt-4o-mini",  # DONT CHANGE THIS
             messages=[
                 {
                     "role": "system",
-                    "content": """You are an expert AI tool analyst.
-Your task is to verify if a webpage actually represents a real AI tool by analyzing its content.
+                    "content": f"""You are an expert AI tool analyst.
+Your task is to verify if a webpage represents a real AI tool and categorize it appropriately.
 
-Key verification points:
-1. Is this a direct tool/product page (not a list, marketplace, or news article)?
-2. Can you identify clear information about what the tool does?
-3. Is there evidence this is a real, working product (not just an announcement or concept)?
+Here is our current database of tools organized by category:
 
-If verified, extract key information in a clean, consistent format.""",
+{categories_context}
+
+When analyzing new tools:
+1. Verify if this is a direct tool/product page (not a list or article)
+2. Identify clear information about what the tool does
+3. Verify it's a real, working product
+4. Choose the most appropriate category based on our existing tools
+5. If the tool represents a new important category, suggest it with strong reasoning""",
                 },
                 {
                     "role": "user",
@@ -99,25 +124,22 @@ Verify if this is a real AI tool page and extract key information if it is.""",
             response_format=SearchAnalysis,
         )
 
-        analysis = completion.choices[0].message.parsed
-
         # Only return if we're very confident this is a real tool page
-        for update in analysis.updates:
+        for update in completion.choices[0].message.parsed.updates:
             if update.confidence >= 90 and update.action == "add":
-                return {
-                    "name": update.name,
-                    "description": update.description,
-                    "url": url,  # Use the final URL after redirects
-                }
+                logger.info(f"Verified ({update.confidence}% confidence)")
+                return {"name": update.name, "description": update.description, "url": url, "category": update.category}
+            else:
+                logger.info(f"Failed: {update.action}")
 
         return None
 
     except Exception as e:
-        logger.error(f"Error analyzing page content: {str(e)}", exc_info=True)
+        logger.error(f"Error analyzing content: {str(e)}")
         return None
 
 
-async def verify_and_enrich_tool(url: str) -> Optional[Dict]:
+async def verify_and_enrich_tool(url: str, current_tools: Dict) -> Optional[Dict]:
     """Visit the URL and verify it's actually a tool's page."""
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
@@ -136,9 +158,12 @@ async def verify_and_enrich_tool(url: str) -> Optional[Dict]:
             # Parse the page content
             soup = BeautifulSoup(response.text, "html.parser")
 
-            # Let GPT analyze the actual page content
+            # Let GPT analyze the actual page content with current tools context
             return await analyze_page_content(
-                url=final_url, title=soup.title.text if soup.title else "", content=soup.get_text()
+                url=final_url,
+                title=soup.title.text if soup.title else "",
+                content=soup.get_text(),
+                current_tools=current_tools,
             )
 
     except Exception as e:
@@ -149,16 +174,82 @@ async def verify_and_enrich_tool(url: str) -> Optional[Dict]:
 async def analyze_search_results(search_results: List[Dict], current_tools: Dict) -> List[Dict]:
     """Analyze new search results in context of existing tools."""
     updates = []
-
-    # First pass with current logic to filter obvious non-tools
     results_text = "\n\n".join(
         [f"Title: {r['title']}\nURL: {r['href']}\nDescription: {r['body']}" for r in search_results]
     )
 
     try:
-        # Initial analysis to filter obvious non-tools
+        logger.info(f"Filtering {len(search_results)} results")
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an expert curator of AI tools.
+                    Your task is to do an initial filter of search results to identify potential AI tools.""",
+                },
+                {
+                    "role": "user",
+                    "content": f"""Here are search results to analyze\n{results_text}\n
+                    Please identify which results likely represent actual AI tools (not articles/lists).""",
+                },
+            ],
+            response_format={"type": "json_object"},
+        )
+
+        analysis = SearchAnalysis.model_validate_json(completion.choices[0].message.content)
+        potential_tools = [u for u in analysis.updates if u.confidence >= 80 and u.action == "add"]
+        logger.info(f"Found {len(potential_tools)} candidates")
+
+        if potential_tools:
+            logger.info("Verifying tools")
+            for update in potential_tools:
+                verified = await verify_and_enrich_tool(update.url, current_tools)
+                if verified:
+                    updates.append(verified)
+                    logger.info(f"✓ {verified['name']} ({verified['category']})")
+                else:
+                    logger.info(f"✗ {update.url}")
+            logger.info(f"Added {len(updates)} tools")
+
+        return updates
+
+    except Exception as e:
+        logger.error(f"Error in analysis: {str(e)}")
+        return []
+
+
+async def tavily_search(query: str, max_results: int = 15) -> List[Dict]:
+    """Search for AI tools using Tavily."""
+    try:
+        if DEV_MODE and query in cache:
+            return cache[query]
+
+        results = tavily_client.search(
+            query=query,
+            search_depth="basic",
+            max_results=min(max_results, 20),
+            include_domains=["github.com", "producthunt.com", "huggingface.co", "replicate.com"],
+        )
+        tavily_results = [{"title": r["title"], "href": r["url"], "body": r["content"]} for r in results["results"]]
+
+        if DEV_MODE:
+            cache[query] = tavily_results
+        return tavily_results
+    except Exception as e:
+        logger.error(f"Search failed: {str(e)}")
+        return []
+
+
+async def filter_results(search_results: List[Dict]) -> List[ToolUpdate]:
+    """Filter search results to identify potential tools."""
+    try:
+        results_text = "\n\n".join(
+            f"Title: {r['title']}\nURL: {r['href']}\nDescription: {r['body']}" for r in search_results
+        )
+
         completion = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",  # DONT CHANGE THIS
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
@@ -174,111 +265,98 @@ async def analyze_search_results(search_results: List[Dict], current_tools: Dict
             response_format=SearchAnalysis,
         )
 
-        initial_analysis = completion.choices[0].message.parsed
-
-        # Verify promising candidates by visiting their pages
-        for update in initial_analysis.updates:
-            if update.confidence >= 80 and update.action == "add":
-                verified = await verify_and_enrich_tool(update.url)
-                if verified:
-                    updates.append(verified)
-                    logger.info(f"Verified and added tool: {verified['name']} ({update.url})")
-                else:
-                    logger.info(f"Failed to verify tool: {update.url}")
-            else:
-                logger.info(f"Skipping tool: {update.url} ({update.confidence}% confident)")
-        return updates
-
+        return [u for u in completion.choices[0].message.parsed.updates if u.confidence >= 80 and u.action == "add"]
     except Exception as e:
-        logger.error(f"Error in search analysis: {str(e)}", exc_info=True)
+        logger.error(f"Filtering failed: {str(e)}")
         return []
 
 
-async def search_ai_tools(query: str, max_results: int = 15) -> List[Dict]:
-    """Search for AI tools using Tavily."""
-    logger.info(f"Searching for AI tools with query: {query}")
-
+async def verify_tool(candidate: ToolUpdate, current_tools: Dict) -> Optional[Dict]:
+    """Verify and enrich a potential tool."""
     try:
-        # Check cache first in dev mode for raw Tavily results
-        if DEV_MODE and query in cache:
-            logger.info(f"Using cached Tavily results for query: {query}")
-            tavily_results = cache[query]
-        else:
-            # Use Tavily to search with better filtering
-            results = tavily_client.search(
-                query=query,
-                search_depth="basic",
-                max_results=min(max_results, 20),  # Tavily max is 20
-                include_domains=["github.com", "producthunt.com", "huggingface.co", "replicate.com"],
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as http_client:
+            response = await http_client.get(candidate.url)
+            final_url = str(response.url)
+
+            # Skip listing pages
+            parsed = urlparse(final_url)
+            if any(x in parsed.path.lower() for x in ["/search", "/category", "/list", "/tools", "/browse"]):
+                return None
+
+            # Extract content
+            soup = BeautifulSoup(response.text, "html.parser")
+            content = soup.get_text()
+            title = soup.title.text if soup.title else ""
+
+            # Analyze with GPT
+            completion = client.beta.chat.completions.parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": build_system_prompt(current_tools),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""Please analyze this webpage content:
+URL: {final_url}
+Title: {title}
+Content: {content[:8000]}""",
+                    },
+                ],
+                response_format=SearchAnalysis,
             )
 
-            # Process raw results - standardize the keys
-            tavily_results = [{"title": r["title"], "href": r["url"], "body": r["content"]} for r in results["results"]]
-
-            # Cache raw Tavily results in dev mode
-            if DEV_MODE:
-                cache[query] = tavily_results
-                logger.info(f"Cached Tavily results for query: {query}")
-
-        # Always do fresh LLM analysis
-        logger.info(f"Analyzing {len(tavily_results)} results with LLM")
-        tools = await analyze_search_results(tavily_results, load_tools())
-        logger.info(f"LLM analysis complete, found {len(tools)} valid tools")
-
-        return tools
-
+            for update in completion.choices[0].message.parsed.updates:
+                if update.confidence >= 90 and update.action == "add":
+                    return {
+                        "name": update.name,
+                        "description": update.description,
+                        "url": final_url,
+                        "category": update.category,
+                    }
+            return None
     except Exception as e:
-        logger.error(f"Error searching with query '{query}': {str(e)}", exc_info=True)
-        return []
+        logger.error(f"Verification failed: {str(e)}")
+        return None
 
 
-async def find_new_tools() -> List[Dict]:
-    """Find new AI tools using strategically categorized search queries."""
-    # In dev mode, use a minimal set of queries
-    if DEV_MODE:
-        queries = [
-            # Just two queries for faster development
-            "site:producthunt.com new AI tool launch",
-            "site:github.com new AI tool release",
-        ]
-        logger.info("Running in development mode with reduced query set")
-    else:
-        queries = [
-            # High-value discovery sources
-            "site:producthunt.com new AI tool launch",
-            "site:github.com new AI tool release",
-            "site:huggingface.co/spaces new",
-            "site:replicate.com new model",
-            # Startup and indie sources
-            "indie AI tool launch 2024",
-            "AI startup launch announcement 2024",
-            "new AI tool beta access",
-            # Time-based discovery
-            "launched new AI tool this week",
-            "announced new AI platform today",
-            "released new artificial intelligence tool",
-            # Open source focus
-            "open source AI tool release",
-            "new AI model github release",
-        ]
+def build_system_prompt(current_tools: Dict) -> str:
+    """Build the system prompt with current tool context."""
+    tools_by_category = {}
+    for tool in current_tools["tools"]:
+        cat = tool.get("category", "Other")
+        if cat not in tools_by_category:
+            tools_by_category[cat] = []
+        tools_by_category[cat].append(tool)
 
-    logger.info(f"Starting search with {len(queries)} queries")
-    all_tools = []
+    categories_text = []
+    for cat, tools in sorted(tools_by_category.items()):
+        tool_details = [f"  - {t['name']}: {t['description']}" for t in tools]
+        categories_text.append(f"{cat} ({len(tools)} tools):\n" + "\n".join(tool_details))
 
-    for query in queries:
-        try:
-            tools = await search_ai_tools(query, max_results=10)
-            all_tools.extend(tools)
-            logger.info(f"Found {len(tools)} tools for query: {query}")
-        except Exception as e:
-            logger.error(f"Error processing query '{query}': {str(e)}", exc_info=True)
+    return f"""You are an expert AI tool analyst.
+Your task is to verify if a webpage represents a real AI tool and categorize it appropriately.
 
-    # Enhanced deduplication using both URL and name similarity
+Here is our current database of tools organized by category:
+
+{"\n\n".join(categories_text)}
+
+When analyzing new tools:
+1. Verify if this is a direct tool/product page (not a list or article)
+2. Identify clear information about what the tool does
+3. Verify it's a real, working product
+4. Choose the most appropriate category based on our existing tools
+5. If the tool represents a new important category, suggest it with strong reasoning"""
+
+
+def deduplicate_tools(tools: List[Dict]) -> List[Dict]:
+    """Remove duplicate tools based on URL and name similarity."""
     seen_urls = set()
     seen_names = set()
     unique_tools = []
 
-    for tool in all_tools:
+    for tool in tools:
         name_key = tool["name"].lower()
         if tool["url"] not in seen_urls and not any(
             existing_name in name_key or name_key in existing_name for existing_name in seen_names
@@ -287,16 +365,143 @@ async def find_new_tools() -> List[Dict]:
             seen_names.add(name_key)
             unique_tools.append(tool)
 
-    logger.info(f"Found {len(unique_tools)} unique tools after deduplication")
     return unique_tools
+
+
+async def find_new_tools() -> List[Dict]:
+    """Find and verify new AI tools."""
+    logger.info("Starting tool discovery")
+    logger.indent()
+
+    # Load data once at start
+    current_tools = load_tools()
+    logger.info(f"Loaded {len(current_tools['tools'])} existing tools")
+
+    # Define queries based on mode
+    queries = (
+        [
+            "site:producthunt.com new AI tool launch",
+            "site:github.com new AI tool release",
+        ]
+        if DEV_MODE
+        else [
+            "site:producthunt.com new AI tool launch",
+            "site:github.com new AI tool release",
+            "site:huggingface.co/spaces new",
+            "site:replicate.com new model",
+            "site:venturebeat.com new AI tool launch",
+            "indie AI tool launch 2024",
+            "AI startup launch announcement 2024",
+            "new AI tool beta access",
+            "launched new AI tool this week",
+            "announced new AI platform today",
+            "released new artificial intelligence tool",
+            "open source AI tool release",
+            "new AI model github release",
+        ]
+    )
+
+    # Process each query
+    all_new_tools = []
+    for query in queries:
+        logger.info(f"Query: {query}")
+        logger.indent()
+
+        # Search phase
+        results = await tavily_search(query)
+        logger.info(f"Found {len(results)} search results")
+
+        # Filter phase
+        candidates = await filter_results(results)
+        logger.info(f"Identified {len(candidates)} potential tools")
+
+        # Verify phase
+        verified = []
+        if candidates:
+            logger.info("Verifying candidates")
+            logger.indent()
+            for candidate in candidates:
+                logger.info(f"Processing {candidate.url}")
+                logger.indent()
+                if result := await verify_tool(candidate, current_tools):
+                    verified.append(result)
+                    logger.info(f"✓ {result['name']} ({result['category']})")
+                else:
+                    logger.info("✗ Failed verification")
+                logger.dedent()
+            logger.dedent()
+
+        all_new_tools.extend(verified)
+        logger.info(f"Found {len(verified)} new tools")
+        logger.dedent()
+
+    # Deduplicate and save
+    unique_tools = deduplicate_tools(all_new_tools)
+    if unique_tools:
+        current_tools["tools"].extend(unique_tools)
+        save_tools(current_tools)
+        logger.info(f"Added {len(unique_tools)} unique tools (now {len(current_tools['tools'])} total)")
+    else:
+        logger.info("No new tools found")
+
+    logger.dedent()
+    logger.info("Tool discovery complete")
+    return unique_tools
+
+
+async def recategorize_all_tools() -> None:
+    """Recategorize all tools in the database with AI assistance."""
+    logger.info("Starting tool recategorization...")
+    current = load_tools()
+    total = len(current["tools"])
+    updated_tools = []
+
+    # Process each tool with full context
+    for i, tool in enumerate(current["tools"], 1):
+        logger.info(f"Processing tool {i}/{total}: {tool['name']}")
+        try:
+            # Create minimal content from existing tool info
+            content = f"""
+Name: {tool['name']}
+Description: {tool['description']}
+URL: {tool['url']}
+Current Category: {tool.get('category', 'None')}
+            """
+
+            updated = await analyze_page_content(
+                url=tool["url"], title=tool["name"], content=content, current_tools=current
+            )
+
+            if updated:
+                logger.info(f"Recategorized {tool['name']}: {tool.get('category', 'None')} -> {updated['category']}")
+                updated_tools.append(updated)
+            else:
+                logger.warning(f"Failed to recategorize {tool['name']}, keeping original")
+                updated_tools.append(tool)
+
+        except Exception as e:
+            logger.error(f"Error processing {tool['name']}: {str(e)}")
+            updated_tools.append(tool)
+
+    # Save back
+    current["tools"] = updated_tools
+    save_tools(current)
+    logger.info("Recategorization complete!")
 
 
 if __name__ == "__main__":
     import asyncio
 
     setup_logging()
-    tools = asyncio.run(find_new_tools())
-    if tools:
-        current = load_tools()
-        current["tools"].extend(tools)
-        save_tools(current)
+
+    # Check if we should recategorize
+    if os.getenv("RECATEGORIZE", "").lower() == "true":
+        logger.info("Running recategorization...")
+        asyncio.run(recategorize_all_tools())
+    else:
+        logger.info("Running normal tool search...")
+        tools = asyncio.run(find_new_tools())
+        if tools:
+            current = load_tools()
+            current["tools"].extend(tools)
+            save_tools(current)
