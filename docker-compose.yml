@@ -7,9 +7,6 @@ services:
       - .env
     ports:
       - "${WEB_PORT}:${WEB_PORT}"
-    volumes:
-      - data:/app/data
-      - ./ai_tools_website:/app/ai_tools_website
     environment:
       - DEV_MODE=false
     healthcheck:
@@ -22,13 +19,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.updater
-    volumes:
-      - data:/app/data
     env_file: .env
     environment:
       - DEV_MODE=true
     depends_on:
       - web
-
-volumes:
-  data:

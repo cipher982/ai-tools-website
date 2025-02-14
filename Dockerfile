@@ -9,19 +9,8 @@ RUN pip install uv
 COPY pyproject.toml uv.lock ./
 COPY ai_tools_website ./ai_tools_website/
 
-# Install dependencies and the package itself
-RUN uv sync && \
-    uv pip install -e .
-
-# Create data directory
-RUN mkdir -p ./data
+# Install dependencies
+RUN uv sync
 
 # Use shell form to allow environment variable expansion
-CMD echo "=== Directory Structure ===" && \
-    ls -la /app && \
-    echo "=== ai_tools_website Contents ===" && \
-    ls -la /app/ai_tools_website && \
-    echo "=== Python Path ===" && \
-    python -c "import sys; print('\n'.join(sys.path))" && \
-    echo "=== Starting App ===" && \
-    uv run uvicorn "ai_tools_website.web:app" --host "0.0.0.0" --port "$WEB_PORT" 
+CMD uv run uvicorn "ai_tools_website.web:app" --host "0.0.0.0" --port "$WEB_PORT" 
