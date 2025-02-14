@@ -14,6 +14,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
   updater:
     build:
@@ -22,5 +23,11 @@ services:
     env_file: .env
     environment:
       - DEV_MODE=true
+    healthcheck:
+      test: ["CMD", "pgrep", "supercronic"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     depends_on:
       - web
