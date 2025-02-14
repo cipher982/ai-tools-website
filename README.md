@@ -2,6 +2,15 @@
 
 A modern Python web application for aggregating and browsing AI tools. Built with FastHTML for the frontend and featuring AI-powered search capabilities.
 
+**🌐 Live at: [aitools.drose.io](https://aitools.drose.io)**
+
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-312/)
+[![FastHTML](https://img.shields.io/badge/frontend-FastHTML-orange.svg)](https://github.com/davidrose/fasthtml)
+[![OpenAI](https://img.shields.io/badge/AI-OpenAI-green.svg)](https://openai.com/)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![UV](https://img.shields.io/badge/package%20manager-uv-4A4A4A.svg)](https://github.com/astral-sh/uv)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 ## Overview
 
 The AI Tools Website aggregates various AI tools and presents them in a responsive, searchable interface. Recent refactoring has separated core functionalities into distinct modules—web, search, logging, data management, and storage—to better organize and scale the application.
@@ -59,7 +68,7 @@ uv run python -m ai_tools_website.web
 uv run python -m ai_tools_website.search
 ```
 
-Visit `http://localhost:8000` (or configured port) in your browser.
+Visit `https://aitools.drose.io` or `http://localhost:8000` (for local development) in your browser.
 
 ## Configuration
 
