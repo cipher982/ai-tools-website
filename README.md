@@ -2,7 +2,9 @@
 
 A modern Python web application for aggregating and browsing AI tools. Built with FastHTML for the frontend and featuring AI-powered search capabilities.
 
-**🌐 Live at: [aitools.drose.io](https://aitools.drose.io)**
+### 🌐 Live at: [aitools.drose.io](https://aitools.drose.io)
+[![Status](https://img.shields.io/uptimerobot/status/m798586414-bbbff2fcd214a94434a62dc7)](https://stats.uptimerobot.com/Jlo4zDIBm8)
+[![Uptime](https://img.shields.io/uptimerobot/ratio/30/m798586414-bbbff2fcd214a94434a62dc7)](https://stats.uptimerobot.com/Jlo4zDIBm8)
 
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-312/)
 [![FastHTML](https://img.shields.io/badge/frontend-FastHTML-orange.svg)](https://github.com/davidrose/fasthtml)
