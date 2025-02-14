@@ -34,6 +34,7 @@ tavily_client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 # Development mode flag - set via environment variable
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
 print(f"DEV_MODE: {DEV_MODE}")
+MODEL_NAME = "gpt-4o-mini"
 
 # Cache with 24 hour expiry and 1GB size limit
 cache = Cache("dev_cache", size_limit=int(1e9), timeout=60 * 60 * 24) if DEV_MODE else None
@@ -90,7 +91,7 @@ async def analyze_page_content(*, url: str, title: str, content: str, current_to
         categories_context = "\n\n".join(categories_text)
 
         completion = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",  # DONT CHANGE THIS
+            model=MODEL_NAME,
             messages=[
                 {
                     "role": "system",
@@ -158,7 +159,7 @@ async def verify_and_enrich_tool(url: str, current_tools: Dict) -> Optional[Dict
             # Parse the page content
             soup = BeautifulSoup(response.text, "html.parser")
 
-            # Let GPT analyze the actual page content with current tools context
+            # Analyze the actual page content with current tools context
             return await analyze_page_content(
                 url=final_url,
                 title=soup.title.text if soup.title else "",
@@ -181,7 +182,7 @@ async def analyze_search_results(search_results: List[Dict], current_tools: Dict
     try:
         logger.info(f"Filtering {len(search_results)} results")
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=MODEL_NAME,
             messages=[
                 {
                     "role": "system",
@@ -249,7 +250,7 @@ async def filter_results(search_results: List[Dict]) -> List[ToolUpdate]:
         )
 
         completion = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
+            model=MODEL_NAME,
             messages=[
                 {
                     "role": "system",
@@ -288,9 +289,9 @@ async def verify_tool(candidate: ToolUpdate, current_tools: Dict) -> Optional[Di
             content = soup.get_text()
             title = soup.title.text if soup.title else ""
 
-            # Analyze with GPT
+            # Analyze
             completion = client.beta.chat.completions.parse(
-                model="gpt-4o-mini",
+                model=MODEL_NAME,
                 messages=[
                     {
                         "role": "system",
@@ -378,28 +379,23 @@ async def find_new_tools() -> List[Dict]:
     logger.info(f"Loaded {len(current_tools['tools'])} existing tools")
 
     # Define queries based on mode
-    queries = (
-        [
-            "site:producthunt.com new AI tool launch",
-            "site:github.com new AI tool release",
-        ]
-        if DEV_MODE
-        else [
-            "site:producthunt.com new AI tool launch",
-            "site:github.com new AI tool release",
-            "site:huggingface.co/spaces new",
-            "site:replicate.com new model",
-            "site:venturebeat.com new AI tool launch",
-            "indie AI tool launch 2024",
-            "AI startup launch announcement 2024",
-            "new AI tool beta access",
-            "launched new AI tool this week",
-            "announced new AI platform today",
-            "released new artificial intelligence tool",
-            "open source AI tool release",
-            "new AI model github release",
-        ]
-    )
+    queries = [
+        "site:producthunt.com new AI tool launch",
+        "site:github.com new AI tool release",
+        "site:producthunt.com new AI tool launch",
+        "site:github.com new AI tool release",
+        "site:huggingface.co/spaces new",
+        "site:replicate.com new model",
+        "site:venturebeat.com new AI tool launch",
+        "indie AI tool launch 2024",
+        "AI startup launch announcement 2024",
+        "new AI tool beta access",
+        "launched new AI tool this week",
+        "announced new AI platform today",
+        "released new artificial intelligence tool",
+        "open source AI tool release",
+        "new AI model github release",
+    ]
 
     # Process each query
     all_new_tools = []
