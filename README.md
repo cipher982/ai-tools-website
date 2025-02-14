@@ -67,7 +67,14 @@ Key environment variables:
 - `WEB_PORT`: Web server port (default: 8000)
 - `OPENAI_API_KEY`: For enhanced search capabilities
 - `TAVILY_API_KEY`: For additional search features
-- `STORAGE_TYPE`: "local" or "minio"
+- `MODEL_NAME`: OpenAI model to use (default: "gpt-4o-mini")
+- `DEV_MODE`: Enable development mode with caching (default: false)
+
+Minio Storage Configuration:
+- `MINIO_ENDPOINT`: Minio server endpoint
+- `MINIO_ACCESS_KEY`: Minio access key
+- `MINIO_SECRET_KEY`: Minio secret key  
+- `MINIO_BUCKET_NAME`: Bucket name for tool storage
 
 See `.env.example` for all options.
 

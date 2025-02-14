@@ -1,5 +1,6 @@
 """Web search functionality for finding AI tools."""
 
+import asyncio
 import logging
 import os
 from typing import Dict
@@ -12,6 +13,7 @@ import httpx
 from bs4 import BeautifulSoup
 from diskcache import Cache
 from dotenv import load_dotenv
+from langsmith.wrappers import wrap_openai
 from openai import OpenAI
 from pydantic import BaseModel
 from pydantic import Field
@@ -28,7 +30,7 @@ load_dotenv()
 base_logger = logging.getLogger(__name__)
 logger = IndentLogger(base_logger)
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = wrap_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 tavily_client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
 # Development mode flag - set via environment variable
@@ -37,7 +39,8 @@ print(f"DEV_MODE: {DEV_MODE}")
 MODEL_NAME = "gpt-4o-mini"
 
 # Cache with 24 hour expiry and 1GB size limit
-cache = Cache("dev_cache", size_limit=int(1e9), timeout=60 * 60 * 24) if DEV_MODE else None
+timeout = 60 * 60 * 24  # 24 hours
+cache = Cache("dev_cache", size_limit=int(1e9), timeout=timeout) if DEV_MODE else None
 
 # Categories must match what we use in tools.json
 CategoryType = Literal[
@@ -397,48 +400,29 @@ async def find_new_tools() -> List[Dict]:
         "new AI model github release",
     ]
 
-    # Process each query
-    all_new_tools = []
-    for query in queries:
-        logger.info(f"Query: {query}")
-        logger.indent()
+    # Parallel search phase
+    logger.info(f"Running {len(queries)} parallel searches")
+    search_results = await asyncio.gather(*[tavily_search(query) for query in queries])
+    all_results = [r for results in search_results for r in results]  # Flatten
+    logger.info(f"Found {len(all_results)} total results")
 
-        # Search phase
-        results = await tavily_search(query)
-        logger.info(f"Found {len(results)} search results")
+    # Parallel filter phase
+    logger.info("Filtering candidates in parallel")
+    candidates = await filter_results(all_results)
+    logger.info(f"Identified {len(candidates)} potential tools")
 
-        # Filter phase
-        candidates = await filter_results(results)
-        logger.info(f"Identified {len(candidates)} potential tools")
-
-        # Verify phase
-        verified = []
-        if candidates:
-            logger.info("Verifying candidates")
-            logger.indent()
-            for candidate in candidates:
-                logger.info(f"Processing {candidate.url}")
-                logger.indent()
-                if result := await verify_tool(candidate, current_tools):
-                    verified.append(result)
-                    logger.info(f"✓ {result['name']} ({result['category']})")
-                else:
-                    logger.info("✗ Failed verification")
-                logger.dedent()
-            logger.dedent()
-
-        all_new_tools.extend(verified)
-        logger.info(f"Found {len(verified)} new tools")
-        logger.dedent()
+    # Parallel verify phase
+    logger.info("Verifying candidates in parallel")
+    verified = await asyncio.gather(*[verify_tool(candidate, current_tools) for candidate in candidates])
+    verified = [v for v in verified if v]  # Remove None results
+    logger.info(f"Verified {len(verified)} tools")
 
     # Deduplicate and save
-    unique_tools = deduplicate_tools(all_new_tools)
+    unique_tools = deduplicate_tools(verified)
     if unique_tools:
         current_tools["tools"].extend(unique_tools)
         save_tools(current_tools)
-        logger.info(f"Added {len(unique_tools)} unique tools (now {len(current_tools['tools'])} total)")
-    else:
-        logger.info("No new tools found")
+        logger.info(f"Added {len(unique_tools)} unique tools")
 
     logger.dedent()
     logger.info("Tool discovery complete")
@@ -486,8 +470,6 @@ Current Category: {tool.get('category', 'None')}
 
 
 if __name__ == "__main__":
-    import asyncio
-
     setup_logging()
 
     # Check if we should recategorize
