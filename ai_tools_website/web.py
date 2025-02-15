@@ -83,10 +83,10 @@ def get():
                 _class="github-corner",
             ),
             P("A curated collection of AI tools, gathered by AI agents.", _class="intro"),
-            Input({"type": "search", "id": "search", "placeholder": "Search tools..."}),
+            Input({"type": "search", "id": "search", "placeholder": "Search tools...", "_id": "search"}),
             *sections,
+            Script(src="search.js"),
         ),
-        Script(src="search.js"),
     )
 
 
