@@ -1,6 +1,8 @@
+import asyncio
+import logging
 import os
-from functools import lru_cache
 from pathlib import Path
+from typing import Dict
 
 from dotenv import load_dotenv
 from fasthtml.common import H2
@@ -19,22 +21,41 @@ from fasthtml.common import Titled
 from fasthtml.fastapp import fast_app
 
 from ai_tools_website.data_manager import load_tools
+from ai_tools_website.logging_config import setup_logging
 
 load_dotenv()
+setup_logging()
+
+# Simple global cache
+tools_cache: Dict = {}
+logger = logging.getLogger(__name__)
 
 
-# Data loading
-@lru_cache()
-def get_tools_by_category():
-    """Load tools from Minio and organize by category"""
-    data = load_tools()
-    tools_by_category = {}
-    for tool in data["tools"]:
+def get_tools_by_category() -> Dict:
+    """Get tools from cache, initialize if empty"""
+    if not tools_cache:
+        logger.info("Cache empty, loading tools from disk")
+        tools = load_tools()
+        by_category = {}
+        for tool in tools["tools"]:
+            category = tool.get("category", "Missing")
+            by_category.setdefault(category, []).append(tool)
+        tools_cache.update(by_category)
+        logger.info(f"Loaded {sum(len(tools) for tools in by_category.values())} tools into cache")
+    return tools_cache
+
+
+async def refresh_tools_background():
+    """Background task to refresh tools cache"""
+    logger.info("Starting background cache refresh")
+    tools = load_tools()
+    by_category = {}
+    for tool in tools["tools"]:
         category = tool.get("category", "Missing")
-        if category not in tools_by_category:
-            tools_by_category[category] = []
-        tools_by_category[category].append(tool)
-    return tools_by_category
+        by_category.setdefault(category, []).append(tool)
+    tools_cache.clear()
+    tools_cache.update(by_category)
+    logger.info(f"Background refresh complete, cached {sum(len(tools) for tools in by_category.values())} tools")
 
 
 # Components
@@ -63,9 +84,12 @@ app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
 
 
 @rt("/")
-def get():
+async def get():
     tools_by_category = get_tools_by_category()
     sections = [category_section(cat, tools) for cat, tools in tools_by_category.items()]
+
+    # Trigger background refresh
+    asyncio.create_task(refresh_tools_background())
 
     return Titled(
         "AI Tools Collection",
