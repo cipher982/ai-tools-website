@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
-echo "Starting tools database update..."
-uv run python -m ai_tools_website.update_page
-echo "Update completed successfully" 
+echo "[$(date -u)] Starting tools database update..."
+if uv run python -m ai_tools_website.search; then
+    echo "[$(date -u)] Update completed successfully"
+else
+    echo "[$(date -u)] Update failed with exit code $?"
+    exit 1
+fi 
