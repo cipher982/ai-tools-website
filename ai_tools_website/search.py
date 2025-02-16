@@ -43,9 +43,9 @@ timeout = 60 * 60 * 24  # 24 hours
 cache = Cache("dev_cache", size_limit=int(1e9), timeout=timeout) if DEV_MODE else None
 
 # Categories must match what we use in tools.json
-CategoryType = Literal[
-    "Language Models", "Image Generation", "Audio & Speech", "Video Generation", "Developer Tools", "Other"
-]
+# CategoryType = Literal[
+#     "Language Models", "Image Generation", "Audio & Speech", "Video Generation", "Developer Tools", "Other"
+# ]
 
 UpdateActionType = Literal["add", "update", "skip"]
 
@@ -59,7 +59,10 @@ class ToolUpdate(BaseModel):
     name: str = Field(description="Clean name of the tool")
     description: str = Field(description="Clear, focused description of what it does")
     url: str = Field(description="Tool's URL")
-    category: str = Field(description="Category for this tool, either existing or new if strongly justified")
+    category: str = Field(
+        description="""Category for this tool. Should be concise, descriptive, and group similar tools.
+        Use existing categories when appropriate, suggest new ones if tool represents a distinct category."""
+    )
     confidence: int = Field(description="Confidence in this decision (0-100)")
     reasoning: str = Field(description="Explanation of the decision and any notable changes/improvements")
 
@@ -81,6 +84,70 @@ class DuplicateStatus(BaseModel):
     )
     reasoning: str = Field(description="Explanation for the decision")
     confidence: int = Field(description="Confidence in decision (0-100)")
+
+
+def build_category_context(current_tools: Dict) -> str:
+    """Build a text representation of tools organized by category."""
+    tools_by_category = {}
+    for tool in current_tools["tools"]:
+        cat = tool.get("category", "Other")
+        if cat not in tools_by_category:
+            tools_by_category[cat] = []
+        tools_by_category[cat].append(tool)
+
+    categories_text = []
+    for cat, tools in sorted(tools_by_category.items()):
+        tool_details = [f"  - {t['name']}: {t['description']}" for t in tools]
+        categories_text.append(f"{cat} ({len(tools)} tools):\n" + "\n".join(tool_details))
+
+    return "\n\n".join(categories_text)
+
+
+async def normalize_category(suggested_category: str, current_tools: Dict) -> str:
+    """Normalize a suggested category against existing ones using full tool context."""
+    # First organize tools by category to understand category contents
+    tools_by_category = {}
+    for tool in current_tools["tools"]:
+        cat = tool.get("category", "Other")
+        if cat not in tools_by_category:
+            tools_by_category[cat] = []
+        tools_by_category[cat].append(tool)
+
+    # If no categories yet or exact match, return as-is
+    if not tools_by_category or suggested_category in tools_by_category:
+        return suggested_category
+
+    categories_text = build_category_context(current_tools)
+
+    completion = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {
+                "role": "system",
+                "content": """You are an expert at organizing AI tools into meaningful categories.
+Your task is to either map a suggested category to an existing one if they contain similar types of tools,
+or confirm it should be a new category if it represents a truly distinct type of tool.""",
+            },
+            {
+                "role": "user",
+                "content": f"""Here is our current database of tools organized by category:
+
+{categories_text}
+
+A new tool is being suggested for the category: {suggested_category}
+
+Based on understanding what tools are in each category:
+1. Should this be mapped to an existing category? (if tools are very similar)
+2. Or kept as a new category? (if it represents a distinct type of tool)
+
+Reply with just the category name to use.""",
+            },
+        ],
+    )
+
+    normalized = completion.choices[0].message.content.strip()
+    logger.info(f"Normalized category: {suggested_category} -> {normalized}")
+    return normalized
 
 
 async def analyze_page_content(*, url: str, title: str, content: str, current_tools: Dict) -> Optional[Dict]:
@@ -119,8 +186,14 @@ When analyzing new tools:
 1. Verify if this is a direct tool/product page (not a list or article)
 2. Identify clear information about what the tool does
 3. Verify it's a real, working product
-4. Choose the most appropriate category based on our existing tools
-5. If the tool represents a new important category, suggest it with strong reasoning""",
+4. Choose or suggest a category based on these principles:
+   - Use existing categories if they fit well
+   - Suggest new categories if the tool represents a distinct type
+   - Keep categories concise but descriptive
+   - Group similar tools together
+   - Consider merging very similar categories
+   - Avoid overly broad or vague categories
+5. Explain your category choice in the reasoning field""",
                 },
                 {
                     "role": "user",
@@ -142,7 +215,14 @@ Verify if this is a real AI tool page and extract key information if it is.""",
         for update in completion.choices[0].message.parsed.updates:
             if update.confidence >= 90 and update.action == "add":
                 logger.info(f"Verified ({update.confidence}% confidence)")
-                return {"name": update.name, "description": update.description, "url": url, "category": update.category}
+                # Normalize the suggested category
+                normalized_category = await normalize_category(update.category, current_tools)
+                return {
+                    "name": update.name,
+                    "description": update.description,
+                    "url": url,
+                    "category": normalized_category,
+                }
             else:
                 logger.info(f"Failed: {update.action}")
 
@@ -348,24 +428,14 @@ Content: {content[:8000]}""",
 
 def build_system_prompt(current_tools: Dict) -> str:
     """Build the system prompt with current tool context."""
-    tools_by_category = {}
-    for tool in current_tools["tools"]:
-        cat = tool.get("category", "Other")
-        if cat not in tools_by_category:
-            tools_by_category[cat] = []
-        tools_by_category[cat].append(tool)
-
-    categories_text = []
-    for cat, tools in sorted(tools_by_category.items()):
-        tool_details = [f"  - {t['name']}: {t['description']}" for t in tools]
-        categories_text.append(f"{cat} ({len(tools)} tools):\n" + "\n".join(tool_details))
+    categories_text = build_category_context(current_tools)
 
     return f"""You are an expert AI tool analyst.
 Your task is to verify if a webpage represents a real AI tool and categorize it appropriately.
 
 Here is our current database of tools organized by category:
 
-{"\n\n".join(categories_text)}
+{categories_text}
 
 When analyzing new tools:
 1. Verify if this is a direct tool/product page (not a list or article)
@@ -452,46 +522,6 @@ async def find_new_tools() -> List[Dict]:
     return verified
 
 
-async def recategorize_all_tools() -> None:
-    """Recategorize all tools in the database with AI assistance."""
-    logger.info("Starting tool recategorization...")
-    current = load_tools()
-    total = len(current["tools"])
-    updated_tools = []
-
-    # Process each tool with full context
-    for i, tool in enumerate(current["tools"], 1):
-        logger.info(f"Processing tool {i}/{total}: {tool['name']}")
-        try:
-            # Create minimal content from existing tool info
-            content = f"""
-Name: {tool['name']}
-Description: {tool['description']}
-URL: {tool['url']}
-Current Category: {tool.get('category', 'None')}
-            """
-
-            updated = await analyze_page_content(
-                url=tool["url"], title=tool["name"], content=content, current_tools=current
-            )
-
-            if updated:
-                logger.info(f"Recategorized {tool['name']}: {tool.get('category', 'None')} -> {updated['category']}")
-                updated_tools.append(updated)
-            else:
-                logger.warning(f"Failed to recategorize {tool['name']}, keeping original")
-                updated_tools.append(tool)
-
-        except Exception as e:
-            logger.error(f"Error processing {tool['name']}: {str(e)}")
-            updated_tools.append(tool)
-
-    # Save back
-    current["tools"] = updated_tools
-    save_tools(current)
-    logger.info("Recategorization complete!")
-
-
 async def check_duplicate_status(
     candidate: ToolUpdate,
     current_tools: Dict[str, List[Dict]],
@@ -557,50 +587,6 @@ Decide whether to:
     return completion.choices[0].message.parsed
 
 
-async def deduplicate_database() -> None:
-    """One-time cleanup to deduplicate the tools database using the new duplicate detection logic."""
-    logger.info("Starting database deduplication...")
-    current = load_tools()
-    total = len(current["tools"])
-    logger.info(f"Processing {total} tools")
-
-    # Convert existing tools to ToolUpdate format for comparison
-    cleaned_tools = []
-    seen_urls = set()
-
-    for i, tool in enumerate(current["tools"], 1):
-        if tool["url"].lower() in seen_urls:
-            logger.info(f"Skipping duplicate URL: {tool['url']}")
-            continue
-
-        candidate = ToolUpdate(
-            action="add",
-            name=tool["name"],
-            description=tool["description"],
-            url=tool["url"],
-            category=tool.get("category", "Other"),
-            confidence=100,
-            reasoning="Existing tool",
-        )
-
-        # Create temporary tools dict without current tool for comparison
-        temp_tools = {"tools": [t for t in current["tools"] if t["url"].lower() != tool["url"].lower()]}
-
-        dup_status = await check_duplicate_status(candidate, temp_tools)
-        if dup_status.status == "new":
-            cleaned_tools.append(tool)
-            seen_urls.add(tool["url"].lower())
-            logger.info(f"Keeping tool {i}/{total}: {tool['name']}")
-        else:
-            logger.info(f"Found duplicate {i}/{total}: {tool['name']} - {dup_status.reasoning}")
-
-    # Save cleaned database
-    logger.info(f"Removed {total - len(cleaned_tools)} duplicates")
-    current["tools"] = cleaned_tools
-    save_tools(current)
-    logger.info("Deduplication complete!")
-
-
 async def smart_deduplicate_tools(tools: List[Dict]) -> List[Dict]:
     """Smart deduplication of tools using LLM comparison.
 
@@ -664,18 +650,5 @@ async def smart_deduplicate_tools(tools: List[Dict]) -> List[Dict]:
 
 if __name__ == "__main__":
     setup_logging()
-
-    # Check run mode
-    if os.getenv("DEDUPLICATE", "").lower() == "true":
-        logger.info("Running one-time deduplication...")
-        asyncio.run(deduplicate_database())
-    elif os.getenv("RECATEGORIZE", "").lower() == "true":
-        logger.info("Running recategorization...")
-        asyncio.run(recategorize_all_tools())
-    else:
-        logger.info("Running normal tool search...")
-        tools = asyncio.run(find_new_tools())
-        if tools:
-            current = load_tools()
-            current["tools"].extend(tools)
-            save_tools(current)
+    logger.info("Running tool search...")
+    asyncio.run(find_new_tools())

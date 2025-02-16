@@ -38,7 +38,7 @@ def get_tools_by_category() -> Dict:
         tools = load_tools()
         by_category = {}
         for tool in tools["tools"]:
-            category = tool.get("category", "Missing")
+            category = tool.get("category", "Other")
             by_category.setdefault(category, []).append(tool)
         tools_cache.update(by_category)
         logger.info(f"Loaded {sum(len(tools) for tools in by_category.values())} tools into cache")
@@ -51,7 +51,7 @@ async def refresh_tools_background():
     tools = load_tools()
     by_category = {}
     for tool in tools["tools"]:
-        category = tool.get("category", "Missing")
+        category = tool.get("category", "Other")
         by_category.setdefault(category, []).append(tool)
     tools_cache.clear()
     tools_cache.update(by_category)
