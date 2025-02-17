@@ -67,8 +67,6 @@ class MinioClient:
                 length=data.getbuffer().nbytes,
                 content_type="application/json",
             )
-            # Clear the cache after update
-            self.get_tools.cache_clear()
             logger.info("Successfully updated tools.json in Minio")
         except S3Error as e:
             logger.error(f"Failed to update tools: {e}")
