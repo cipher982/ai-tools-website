@@ -10,10 +10,11 @@ from pydantic import Field
 from .data_manager import load_tools
 from .data_manager import save_tools
 from .logging_config import setup_logging
-from .search import MODEL_NAME
 from .search import build_category_context
 from .search import client
 from .search import smart_deduplicate_tools
+
+MODEL_NAME = "o3-mini"
 
 
 class CategoryChange(BaseModel):
@@ -55,6 +56,7 @@ async def recategorize_database() -> None:
 
     completion = client.beta.chat.completions.parse(
         model=MODEL_NAME,
+        reasoning_effort="high",
         messages=[
             {
                 "role": "system",
@@ -64,7 +66,12 @@ Consider:
 1. Categories that could be merged (e.g., 'LLMs' and 'Language Models')
 2. Categories that should be split (e.g., if 'Other' contains distinct groups)
 3. Tools that might fit better in different categories
-4. Category names that could be more clear or consistent""",
+4. Category names that could be more clear or consistent
+
+Since this task will run often, be careful to not keep creating more specific categories.
+Focus on broad categories that a user will be seeing on a webpage and can quickly scroll through.
+
+""",
             },
             {
                 "role": "user",
