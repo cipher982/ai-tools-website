@@ -205,8 +205,12 @@ The application uses environment variables for configuration. Copy `.env.example
 
 ### Core Settings
 - `WEB_PORT`: Web server port (default: 8000)
-- `DEV_MODE`: Enable development mode with caching (default: false)
 - `LOG_LEVEL`: Logging verbosity (default: INFO)
+
+### CLI Flags
+When running the search module:
+- `--cache-searches`: Cache Tavily search results for faster iteration
+- `--dry-run`: Run without saving any changes
 
 ### AI Service Integration
 - `OPENAI_API_KEY`: OpenAI API key for enhanced search

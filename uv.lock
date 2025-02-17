@@ -11,6 +11,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
+    { name = "click" },
     { name = "diskcache" },
     { name = "httpx" },
     { name = "langsmith" },
@@ -25,6 +26,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.13.3" },
+    { name = "click", specifier = ">=8.1.8" },
     { name = "diskcache", specifier = ">=5.6.3" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langsmith", specifier = ">=0.3.8" },

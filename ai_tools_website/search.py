@@ -9,6 +9,7 @@ from typing import Literal
 from typing import Optional
 from urllib.parse import urlparse
 
+import click
 import httpx
 from bs4 import BeautifulSoup
 from diskcache import Cache
@@ -33,14 +34,14 @@ logger = IndentLogger(base_logger)
 client = wrap_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 tavily_client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
-# Development mode flag - set via environment variable
-DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
-print(f"DEV_MODE: {DEV_MODE}")
-MODEL_NAME = "gpt-4o-mini"
+MODEL_NAME = "o3-mini"
 
-# Cache with 24 hour expiry and 1GB size limit
-timeout = 60 * 60 * 24  # 24 hours
-cache = Cache("dev_cache", size_limit=int(1e9), timeout=timeout) if DEV_MODE else None
+# Cache settings
+CACHE_TIMEOUT = 60 * 60 * 24  # 24 hours
+CACHE_SIZE = int(1e9)  # 1GB size limit
+
+# Initialize cache as None - will be set in find_new_tools based on cache_searches flag
+cache = None
 
 # Categories must match what we use in tools.json
 # CategoryType = Literal[
@@ -316,7 +317,7 @@ async def analyze_search_results(search_results: List[Dict], current_tools: Dict
 async def tavily_search(query: str, max_results: int = 15) -> List[Dict]:
     """Search for AI tools using Tavily."""
     try:
-        if DEV_MODE and query in cache:
+        if cache is not None and query in cache:
             return cache[query]
 
         results = tavily_client.search(
@@ -327,7 +328,7 @@ async def tavily_search(query: str, max_results: int = 15) -> List[Dict]:
         )
         tavily_results = [{"title": r["title"], "href": r["url"], "body": r["content"]} for r in results["results"]]
 
-        if DEV_MODE:
+        if cache is not None:
             cache[query] = tavily_results
         return tavily_results
     except Exception as e:
@@ -466,7 +467,7 @@ def deduplicate_tools(tools: List[Dict]) -> List[Dict]:
     return unique_tools
 
 
-async def find_new_tools() -> List[Dict]:
+async def find_new_tools(*, cache_searches: bool = False, dry_run: bool = False) -> List[Dict]:
     """Find and verify new AI tools."""
     logger.info("Starting tool discovery")
     logger.indent()
@@ -474,6 +475,10 @@ async def find_new_tools() -> List[Dict]:
     # Load data once at start
     current_tools = load_tools()
     logger.info(f"Loaded {len(current_tools['tools'])} existing tools")
+
+    # Set up cache if search caching is enabled
+    global cache
+    cache = Cache("search_cache", size_limit=CACHE_SIZE, timeout=CACHE_TIMEOUT) if cache_searches else None
 
     # Define queries based on mode
     queries = [
@@ -513,9 +518,12 @@ async def find_new_tools() -> List[Dict]:
 
     # Save verified tools (duplicates already handled)
     if verified:
-        current_tools["tools"].extend(verified)
-        save_tools(current_tools)
-        logger.info(f"Added {len(verified)} tools")
+        if dry_run:
+            logger.info(f"[DRY RUN] Would have added {len(verified)} tools")
+        else:
+            current_tools["tools"].extend(verified)
+            save_tools(current_tools)
+            logger.info(f"Added {len(verified)} tools")
 
     logger.dedent()
     logger.info("Tool discovery complete")
@@ -648,7 +656,19 @@ async def smart_deduplicate_tools(tools: List[Dict]) -> List[Dict]:
     return cleaned_tools
 
 
-if __name__ == "__main__":
+@click.command()
+@click.option("--cache-searches", is_flag=True, help="Cache Tavily search results for faster iteration")
+@click.option("--dry-run", is_flag=True, help="Run without saving any changes")
+def main(cache_searches: bool, dry_run: bool):
+    """Run tool search with optional search result caching and dry run flags."""
     setup_logging()
     logger.info("Running tool search...")
-    asyncio.run(find_new_tools())
+    if cache_searches:
+        logger.info("Search result caching enabled")
+    if dry_run:
+        logger.info("Dry run mode enabled - no changes will be saved")
+    asyncio.run(find_new_tools(cache_searches=cache_searches, dry_run=dry_run))
+
+
+if __name__ == "__main__":
+    main()
