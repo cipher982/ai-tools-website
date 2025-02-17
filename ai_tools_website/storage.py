@@ -1,6 +1,5 @@
 import json
 import logging
-from functools import lru_cache
 from io import BytesIO
 from typing import Dict
 
@@ -17,7 +16,7 @@ class MinioClient:
         access_key: str,
         secret_key: str,
         bucket_name: str,
-        secure: bool = False,  # Default to False for development
+        secure: bool = False,
     ) -> None:
         self.bucket_name = bucket_name
         self.client = Minio(
@@ -38,7 +37,6 @@ class MinioClient:
             logger.error(f"Failed to ensure bucket exists: {e}")
             raise
 
-    @lru_cache(maxsize=1)
     def get_tools(self) -> Dict:
         """Get tools data from Minio with caching."""
         try:
@@ -59,20 +57,19 @@ class MinioClient:
             raise
 
     def update_tools(self, tools_data: Dict) -> None:
-        """Update tools.json in Minio storage."""
+        """Update tools data in Minio."""
         try:
-            json_bytes = json.dumps(tools_data).encode("utf-8")
-            data = BytesIO(json_bytes)
+            data = BytesIO(json.dumps(tools_data, indent=2).encode())
             self.client.put_object(
                 self.bucket_name,
                 "tools.json",
-                data=data,
-                length=len(json_bytes),
+                data,
+                length=data.getbuffer().nbytes,
                 content_type="application/json",
             )
             # Clear the cache after update
             self.get_tools.cache_clear()
             logger.info("Successfully updated tools.json in Minio")
         except S3Error as e:
-            logger.error(f"Failed to update tools.json: {e}")
+            logger.error(f"Failed to update tools: {e}")
             raise

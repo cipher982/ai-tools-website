@@ -1,8 +1,11 @@
 """Maintenance tasks for the AI tools database."""
 
 import asyncio
-import json
 import logging
+from typing import List
+
+from pydantic import BaseModel
+from pydantic import Field
 
 from .data_manager import load_tools
 from .data_manager import save_tools
@@ -11,6 +14,31 @@ from .search import MODEL_NAME
 from .search import build_category_context
 from .search import client
 from .search import smart_deduplicate_tools
+
+
+class CategoryChange(BaseModel):
+    """Represents a category name change."""
+
+    from_category: str = Field(alias="from", description="Original category name")
+    to_category: str = Field(alias="to", description="New category name")
+    reason: str = Field(description="Explanation for the change")
+
+
+class ToolMove(BaseModel):
+    """Represents moving a tool to a different category."""
+
+    tool: str = Field(description="Name of the tool to move")
+    from_category: str = Field(alias="from", description="Original category")
+    to_category: str = Field(alias="to", description="New category")
+    reason: str = Field(description="Explanation for the move")
+
+
+class RecategorizationChanges(BaseModel):
+    """Complete set of categorization changes."""
+
+    category_changes: List[CategoryChange] = Field(default_factory=list)
+    tool_moves: List[ToolMove] = Field(default_factory=list)
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +53,7 @@ async def recategorize_database() -> None:
     # Get AI to analyze current categorization and suggest improvements
     categories_text = build_category_context(current)
 
-    completion = client.chat.completions.create(
+    completion = client.beta.chat.completions.parse(
         model=MODEL_NAME,
         messages=[
             {
@@ -44,59 +72,65 @@ Consider:
 
 {categories_text}
 
-Analyze this categorization and suggest a revised category structure.
-Reply in this JSON format:
-{{
-    "category_changes": [
-        {{"from": "old_category", "to": "new_category", "reason": "explanation"}}
-    ],
-    "tool_moves": [
-        {{"tool": "tool_name", "from": "old_category", "to": "new_category", "reason": "explanation"}}
-    ]
-}}""",
+Analyze this categorization and suggest a revised category structure.""",
             },
         ],
+        response_format=RecategorizationChanges,
     )
 
-    changes = json.loads(completion.choices[0].message.content)
-    logger.info("Got reorganization suggestions:")
-    for change in changes["category_changes"]:
-        logger.info(f"Category: {change['from']} -> {change['to']}: {change['reason']}")
-    for move in changes["tool_moves"]:
-        logger.info(f"Tool: {move['tool']} from {move['from']} to {move['to']}: {move['reason']}")
+    changes = completion.choices[0].message.parsed
+    logger.info("\nProposed reorganization changes:")
 
-    # Apply the changes if they seem reasonable
-    if changes["category_changes"] or changes["tool_moves"]:
-        logger.info("Applying suggested changes...")
-        updated_tools = []
-
-        # Create mapping of old -> new categories
-        category_map = {c["from"]: c["to"] for c in changes["category_changes"]}
-
-        # Create mapping of tool -> new category
-        tool_map = {m["tool"]: m["to"] for m in changes["tool_moves"]}
-
-        for tool in current["tools"]:
-            new_tool = tool.copy()
-            current_cat = tool.get("category", "Other")
-
-            # Check if tool should move
-            if tool["name"] in tool_map:
-                new_tool["category"] = tool_map[tool["name"]]
-                logger.info(f"Moving {tool['name']} to {new_tool['category']}")
-            # Check if category should change
-            elif current_cat in category_map:
-                new_tool["category"] = category_map[current_cat]
-                logger.info(f"Updating category for {tool['name']}: {current_cat} -> {new_tool['category']}")
-
-            updated_tools.append(new_tool)
-
-        # Save changes
-        current["tools"] = updated_tools
-        save_tools(current)
-        logger.info("Reorganization complete!")
-    else:
+    if not changes.category_changes and not changes.tool_moves:
         logger.info("No changes suggested, categories look good!")
+        return
+
+    if changes.category_changes:
+        logger.info("\nCategory renames:")
+        for change in changes.category_changes:
+            logger.info(f"  • {change.from_category} -> {change.to_category}")
+            logger.info(f"    Reason: {change.reason}")
+
+    if changes.tool_moves:
+        logger.info("\nTool moves:")
+        for move in changes.tool_moves:
+            logger.info(f"  • {move.tool}: {move.from_category} -> {move.to_category}")
+            logger.info(f"    Reason: {move.reason}")
+
+    # Get user confirmation
+    response = input("\nApply these changes? (y/n): ").lower().strip()
+    if response != "y":
+        logger.info("Changes cancelled.")
+        return
+
+    logger.info("Applying changes...")
+    updated_tools = []
+
+    # Create mapping of old -> new categories
+    category_map = {c.from_category: c.to_category for c in changes.category_changes}
+
+    # Create mapping of tool -> new category
+    tool_map = {m.tool: m.to_category for m in changes.tool_moves}
+
+    for tool in current["tools"]:
+        new_tool = tool.copy()
+        current_cat = tool.get("category", "Other")
+
+        # Check if tool should move
+        if tool["name"] in tool_map:
+            new_tool["category"] = tool_map[tool["name"]]
+            logger.info(f"Moving {tool['name']} to {new_tool['category']}")
+        # Check if category should change
+        elif current_cat in category_map:
+            new_tool["category"] = category_map[current_cat]
+            logger.info(f"Updating category for {tool['name']}: {current_cat} -> {new_tool['category']}")
+
+        updated_tools.append(new_tool)
+
+    # Save changes
+    current["tools"] = updated_tools
+    save_tools(current)
+    logger.info("Reorganization complete!")
 
 
 async def deduplicate_database() -> None:
