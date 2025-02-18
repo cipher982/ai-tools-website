@@ -541,19 +541,15 @@ async def find_new_tools(*, cache_searches: bool = False, dry_run: bool = False)
     queries = [
         "site:producthunt.com new AI tool launch",
         "site:github.com new AI tool release",
-        "site:producthunt.com new AI tool launch",
-        "site:github.com new AI tool release",
         "site:huggingface.co/spaces new",
         "site:replicate.com new model",
         "site:venturebeat.com new AI tool launch",
-        "indie AI tool launch 2024",
-        "AI startup launch announcement 2024",
         "new AI tool beta access",
-        "launched new AI tool this week",
-        "announced new AI platform today",
         "released new artificial intelligence tool",
         "open source AI tool release",
-        "new AI model github release",
+        "new AI model release",
+        "Best AI tools 2025",
+        "Top open-source AI models",
     ]
 
     # Parallel search phase
