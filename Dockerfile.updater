@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install UV and supercronic for scheduling
 RUN apt-get update && \
-    apt-get install -y wget && \
+    apt-get install -y wget procps && \
     wget https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic-linux-amd64 -O /usr/local/bin/supercronic && \
     chmod +x /usr/local/bin/supercronic && \
     apt-get remove -y wget && \
