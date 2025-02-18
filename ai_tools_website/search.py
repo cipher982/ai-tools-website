@@ -41,7 +41,6 @@ MODEL_NAME = "o3-mini"
 CACHE_TIMEOUT = 60 * 60 * 24  # 24 hours
 CACHE_SIZE = int(1e9)  # 1GB size limit
 
-# Initialize cache as None - will be set in find_new_tools based on cache_searches flag
 cache = None
 
 # Categories must match what we use in tools.json
@@ -528,7 +527,7 @@ def deduplicate_tools(tools: List[Dict]) -> List[Dict]:
     return unique_tools
 
 
-async def find_new_tools(*, cache_searches: bool = False, dry_run: bool = False) -> List[ToolUpdate]:
+async def find_new_tools(*, use_search_cache: bool = False, dry_run: bool = False) -> List[ToolUpdate]:
     """Find and verify new AI tools."""
     logger.info("Starting tool discovery")
     logger.indent()
@@ -539,7 +538,7 @@ async def find_new_tools(*, cache_searches: bool = False, dry_run: bool = False)
 
     # Set up cache if search caching is enabled
     global cache
-    cache = Cache("search_cache", size_limit=CACHE_SIZE, timeout=CACHE_TIMEOUT) if cache_searches else None
+    cache = Cache("search_cache", size_limit=CACHE_SIZE, timeout=CACHE_TIMEOUT) if use_search_cache else None
 
     # Define queries based on mode
     queries = [
@@ -754,17 +753,17 @@ async def smart_deduplicate_tools(tools: List[Dict]) -> List[Dict]:
 
 
 @click.command()
-@click.option("--cache-searches", is_flag=True, help="Cache Tavily search results for faster iteration")
+@click.option("--use-search-cache", is_flag=True, help="Use cached Tavily search results if available")
 @click.option("--dry-run", is_flag=True, help="Run without saving any changes")
-def main(cache_searches: bool, dry_run: bool):
-    """Run tool search with optional search result caching and dry run flags."""
+def main(use_search_cache: bool, dry_run: bool):
+    """Run tool search with optional cached results and dry run flags."""
     setup_logging()
     logger.info("Running tool search...")
-    if cache_searches:
-        logger.info("Search result caching enabled")
+    if use_search_cache:
+        logger.info("Using cached search results if available")
     if dry_run:
         logger.info("Dry run mode enabled - no changes will be saved")
-    asyncio.run(find_new_tools(cache_searches=cache_searches, dry_run=dry_run))
+    asyncio.run(find_new_tools(use_search_cache=use_search_cache, dry_run=dry_run))
 
 
 if __name__ == "__main__":
