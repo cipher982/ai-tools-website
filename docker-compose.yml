@@ -7,7 +7,6 @@ services:
       - .env
     ports:
       - "${WEB_PORT}:${WEB_PORT}"
-    command: ["python", "-m", "ai_tools_website.web"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${WEB_PORT}/health"]
       interval: 30s
@@ -20,7 +19,6 @@ services:
       context: .
       dockerfile: Dockerfile.updater
     env_file: .env
-    command: ["python", "-m", "ai_tools_website.search", "--cache-searches"]
     healthcheck:
       test: ["CMD", "pgrep", "supercronic"]
       interval: 30s
