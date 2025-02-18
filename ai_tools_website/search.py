@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from collections import defaultdict
 from typing import Dict
 from typing import List
 from typing import Literal
@@ -48,14 +49,20 @@ cache = None
 #     "Language Models", "Image Generation", "Audio & Speech", "Video Generation", "Developer Tools", "Other"
 # ]
 
-UpdateActionType = Literal["add", "update", "skip"]
+UpdateActionType = Literal["add", "update", "skip", "error"]
 
 
 class ToolUpdate(BaseModel):
-    """Represents an update decision for a tool"""
+    """Represents a tool update decision with complete verification status"""
 
     action: UpdateActionType = Field(
-        description="Action to take: 'add' (new tool), 'update' (modify existing), 'skip' (duplicate/invalid)"
+        description="""
+        Action to take:
+        - 'add' (new tool)
+        - 'update' (modify existing)
+        - 'skip' (duplicate/invalid)
+        - 'error' (verification failed)
+        """
     )
     name: str = Field(description="Clean name of the tool")
     description: str = Field(description="Clear, focused description of what it does")
@@ -66,6 +73,7 @@ class ToolUpdate(BaseModel):
     )
     confidence: int = Field(description="Confidence in this decision (0-100)")
     reasoning: str = Field(description="Explanation of the decision and any notable changes/improvements")
+    existing_index: Optional[int] = Field(None, description="Index in current tools list if this is an update")
 
 
 class SearchAnalysis(BaseModel):
@@ -366,17 +374,37 @@ async def filter_results(search_results: List[Dict]) -> List[ToolUpdate]:
         return []
 
 
-async def verify_tool(candidate: ToolUpdate, current_tools: Dict) -> Optional[Dict]:
+async def verify_tool(candidate: ToolUpdate, current_tools: Dict) -> Optional[ToolUpdate]:
     """Verify and enrich a potential tool."""
     try:
         # First check if this is a duplicate
         dup_status = await check_duplicate_status(candidate, current_tools)
         if dup_status.status == "skip":
             logger.info(f"Skipping {candidate.name}: {dup_status.reasoning}")
-            return None
+            return ToolUpdate(
+                action="skip",
+                name=candidate.name,
+                description=candidate.description,
+                url=candidate.url,
+                category=candidate.category,
+                confidence=dup_status.confidence,
+                reasoning=dup_status.reasoning,
+            )
         elif dup_status.status == "update":
-            logger.info(f"Will update {candidate.name}: {dup_status.reasoning}")
-            # Continue with verification to get fresh data
+            # Find the index of the tool to update
+            for i, tool in enumerate(current_tools["tools"]):
+                if tool["url"].lower() == candidate.url.lower():
+                    logger.info(f"Will update {candidate.name}: {dup_status.reasoning}")
+                    return ToolUpdate(
+                        action="update",
+                        name=candidate.name,
+                        description=candidate.description,
+                        url=candidate.url,
+                        category=candidate.category,
+                        confidence=dup_status.confidence,
+                        reasoning=dup_status.reasoning,
+                        existing_index=i,
+                    )
         else:
             logger.info(f"Processing new tool: {candidate.name}")
 
@@ -387,7 +415,15 @@ async def verify_tool(candidate: ToolUpdate, current_tools: Dict) -> Optional[Di
             # Skip listing pages
             parsed = urlparse(final_url)
             if any(x in parsed.path.lower() for x in ["/search", "/category", "/list", "/tools", "/browse"]):
-                return None
+                return ToolUpdate(
+                    action="error",
+                    name=candidate.name,
+                    description=candidate.description,
+                    url=final_url,
+                    category=candidate.category,
+                    confidence=0,
+                    reasoning="Skipping listing/search page",
+                )
 
             # Extract content
             soup = BeautifulSoup(response.text, "html.parser")
@@ -415,16 +451,37 @@ Content: {content[:8000]}""",
 
             for update in completion.choices[0].message.parsed.updates:
                 if update.confidence >= 90 and update.action == "add":
-                    return {
-                        "name": update.name,
-                        "description": update.description,
-                        "url": final_url,
-                        "category": update.category,
-                    }
-            return None
+                    return ToolUpdate(
+                        action="add",
+                        name=update.name,
+                        description=update.description,
+                        url=final_url,
+                        category=update.category,
+                        confidence=update.confidence,
+                        reasoning="Verified as new tool",
+                    )
+
+            return ToolUpdate(
+                action="error",
+                name=candidate.name,
+                description=candidate.description,
+                url=final_url,
+                category=candidate.category,
+                confidence=0,
+                reasoning="Failed verification checks",
+            )
+
     except Exception as e:
         logger.error(f"Verification failed: {str(e)}")
-        return None
+        return ToolUpdate(
+            action="error",
+            name=candidate.name,
+            description=candidate.description,
+            url=candidate.url,
+            category=candidate.category,
+            confidence=0,
+            reasoning=f"Error during verification: {str(e)}",
+        )
 
 
 def build_system_prompt(current_tools: Dict) -> str:
@@ -467,7 +524,7 @@ def deduplicate_tools(tools: List[Dict]) -> List[Dict]:
     return unique_tools
 
 
-async def find_new_tools(*, cache_searches: bool = False, dry_run: bool = False) -> List[Dict]:
+async def find_new_tools(*, cache_searches: bool = False, dry_run: bool = False) -> List[ToolUpdate]:
     """Find and verify new AI tools."""
     logger.info("Starting tool discovery")
     logger.indent()
@@ -514,16 +571,56 @@ async def find_new_tools(*, cache_searches: bool = False, dry_run: bool = False)
     logger.info("Verifying candidates in parallel")
     verified = await asyncio.gather(*[verify_tool(candidate, current_tools) for candidate in candidates])
     verified = [v for v in verified if v]  # Remove None results
-    logger.info(f"Verified {len(verified)} tools")
 
-    # Save verified tools (duplicates already handled)
+    # Log verification results by status
+    by_status = defaultdict(list)
+    for result in verified:
+        by_status[result.action].append(result)
+
+    logger.info("Verification results:")
+    logger.indent()
+    for action, results in by_status.items():
+        logger.info(f"{action.upper()}: {len(results)} tools")
+        for result in results:
+            logger.info(f"  • {result.name}: {result.reasoning}")
+    logger.dedent()
+
+    # Save verified tools
     if verified:
         if dry_run:
-            logger.info(f"[DRY RUN] Would have added {len(verified)} tools")
+            logger.info("[DRY RUN] Would have made the following changes:")
+            logger.indent()
+            for tool in verified:
+                if tool.action in ["add", "update"]:
+                    logger.info(f"{tool.action.upper()}: {tool.name} - {tool.reasoning}")
+            logger.dedent()
         else:
-            current_tools["tools"].extend(verified)
+            # Handle updates first
+            for tool in [t for t in verified if t.action == "update" and t.existing_index is not None]:
+                current_tools["tools"][tool.existing_index] = {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "url": tool.url,
+                    "category": tool.category,
+                }
+                logger.info(f"Updated tool: {tool.name}")
+
+            # Handle additions
+            new_tools = [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "url": tool.url,
+                    "category": tool.category,
+                }
+                for tool in verified
+                if tool.action == "add"
+            ]
+            if new_tools:
+                current_tools["tools"].extend(new_tools)
+                logger.info(f"Added {len(new_tools)} new tools")
+
             save_tools(current_tools)
-            logger.info(f"Added {len(verified)} tools")
 
     logger.dedent()
     logger.info("Tool discovery complete")
