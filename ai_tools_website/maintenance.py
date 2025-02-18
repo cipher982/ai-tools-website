@@ -70,6 +70,15 @@ Consider:
 
 Since this task will run often, be careful to not keep creating more specific categories.
 Focus on broad categories that a user will be seeing on a webpage and can quickly scroll through.
+Also we can differentiate and mix 'models' and 'tools'. So they can have their own categories.
+
+IMPORTANT RULES FOR CATEGORY NAMES:
+1. Must be a simple, concise noun or noun phrase (e.g. "Language Models", "Developer Tools")
+2. Never use explanatory phrases or parentheticals as category names
+3. Never include words like "redistributed" or "moved to" in category names
+4. Keep names short and clear - ideally 1-3 words
+5. Use title case consistently
+
 
 """,
             },
