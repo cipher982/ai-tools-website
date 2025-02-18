@@ -325,8 +325,12 @@ async def analyze_search_results(search_results: List[Dict], current_tools: Dict
 async def tavily_search(query: str, max_results: int = 15) -> List[Dict]:
     """Search for AI tools using Tavily."""
     try:
-        if cache is not None and query in cache:
-            return cache[query]
+        # Initialize cache for storing results regardless of cache_searches flag
+        search_cache = Cache("search_cache", size_limit=CACHE_SIZE, timeout=CACHE_TIMEOUT)
+
+        # Only use cached results if cache_searches is True and query exists in cache
+        if cache is not None and query in search_cache:
+            return search_cache[query]
 
         results = tavily_client.search(
             query=query,
@@ -336,8 +340,8 @@ async def tavily_search(query: str, max_results: int = 15) -> List[Dict]:
         )
         tavily_results = [{"title": r["title"], "href": r["url"], "body": r["content"]} for r in results["results"]]
 
-        if cache is not None:
-            cache[query] = tavily_results
+        # Always cache new results
+        search_cache[query] = tavily_results
         return tavily_results
     except Exception as e:
         logger.error(f"Search failed: {str(e)}")
