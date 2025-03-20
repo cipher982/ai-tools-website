@@ -44,7 +44,7 @@ class RecategorizationChanges(BaseModel):
 logger = logging.getLogger(__name__)
 
 
-async def recategorize_database() -> None:
+async def recategorize_database(auto_accept: bool = False) -> None:
     """Do a complete review and reorganization of tool categories."""
     logger.info("Starting tool recategorization...")
     current = load_tools()
@@ -56,7 +56,7 @@ async def recategorize_database() -> None:
 
     completion = client.beta.chat.completions.parse(
         model=MODEL_NAME,
-        reasoning_effort="high",
+        reasoning_effort="low",
         messages=[
             {
                 "role": "system",
@@ -113,11 +113,14 @@ Analyze this categorization and suggest a revised category structure.""",
             logger.info(f"  • {move.tool}: {move.from_category} -> {move.to_category}")
             logger.info(f"    Reason: {move.reason}")
 
-    # Get user confirmation
-    response = input("\nApply these changes? (y/n): ").lower().strip()
-    if response != "y":
-        logger.info("Changes cancelled.")
-        return
+    # Get user confirmation if not auto-accepting
+    if not auto_accept:
+        response = input("\nApply these changes? (y/n): ").lower().strip()
+        if response != "y":
+            logger.info("Changes cancelled.")
+            return
+    else:
+        logger.info("Auto-accepting changes...")
 
     logger.info("Applying changes...")
     updated_tools = []
@@ -170,6 +173,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="AI Tools Website Maintenance Tasks")
     parser.add_argument("task", choices=["deduplicate", "recategorize"], help="Maintenance task to perform")
+    parser.add_argument("--yes", "-y", action="store_true", help="Auto-accept changes without prompting")
 
     args = parser.parse_args()
     setup_logging()
@@ -177,4 +181,4 @@ if __name__ == "__main__":
     if args.task == "deduplicate":
         asyncio.run(deduplicate_database())
     elif args.task == "recategorize":
-        asyncio.run(recategorize_database())
+        asyncio.run(recategorize_database(auto_accept=args.yes))
