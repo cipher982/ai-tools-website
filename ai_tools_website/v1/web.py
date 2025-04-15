@@ -20,8 +20,8 @@ from fasthtml.common import StyleX
 from fasthtml.common import Titled
 from fasthtml.fastapp import fast_app
 
-from ai_tools_website.data_manager import load_tools
-from ai_tools_website.logging_config import setup_logging
+from ai_tools_website.v1.data_manager import load_tools
+from ai_tools_website.v1.logging_config import setup_logging
 
 load_dotenv()
 setup_logging()
