@@ -16,7 +16,7 @@ class MinioClient:
         access_key: str,
         secret_key: str,
         bucket_name: str,
-        secure: bool = False,
+        secure: bool,
     ) -> None:
         self.bucket_name = bucket_name
         self.client = Minio(

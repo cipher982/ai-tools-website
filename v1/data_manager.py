@@ -18,6 +18,7 @@ minio_client = MinioClient(
     access_key=os.environ["MINIO_ACCESS_KEY"],
     secret_key=os.environ["MINIO_SECRET_KEY"],
     bucket_name=os.environ["MINIO_BUCKET_NAME"],
+    secure=True,
 )
 
 
