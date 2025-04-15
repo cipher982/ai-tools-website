@@ -1,5 +1,5 @@
 [project]
-name = "ai-tools-website"
+name = "ai-tools"
 version = "0.1.0"
 description = "AI Tools Website"
 requires-python = ">=3.12"
@@ -25,7 +25,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-packages = ["ai_tools_website"]
+packages = ["ai_tools"]
 
 [tool.ruff]
 line-length = 120
