@@ -14,7 +14,7 @@ from .search import build_category_context
 from .search import client
 from .search import smart_deduplicate_tools
 
-MODEL_NAME = "o3-mini"
+MODEL_NAME = "o3"
 
 
 class CategoryChange(BaseModel):
