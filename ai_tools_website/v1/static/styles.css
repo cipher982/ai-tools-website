@@ -103,13 +103,13 @@ body {
     font: inherit;
 }
 
-.input-sunken:focus {
+#search:focus {
     outline: none;
-    border-color: var(--win98-dark-shadow) var(--win98-text-light) var(--win98-text-light) var(--win98-dark-shadow);
+    border-color: var(--win98-dark-shadow) var(--taskman-green) var(--taskman-green) var(--win98-dark-shadow);
 }
 
-.input-sunken::placeholder {
-    color: var(--win98-inactive-title);
+#search::placeholder {
+    color: var(--win98-shadow);
 }
 
 /* Layout */
@@ -144,6 +144,7 @@ body {
     background: var(--win98-face);
     border: var(--border-raised);
     border-color: var(--border-raised-color);
+    color: var(--win98-text);
 }
 
 .tools-grid {
@@ -168,11 +169,13 @@ body {
 .tool-card h5 {
     margin: 0 0 var(--spacing-sm);
     font-weight: bold;
+    color: var(--win98-text);
 }
 
 .tool-card p {
     margin: 0 0 var(--spacing-md);
     line-height: 1.3;
+    color: var(--win98-text);
 }
 
 .tool-card a {
@@ -229,8 +232,8 @@ body {
 #search {
     border: var(--border-sunken);
     border-color: var(--border-sunken-color);
-    background: var(--win98-text-light);
-    color: var(--win98-text);
+    background: var(--taskman-bg);
+    color: var(--taskman-green);
     padding: var(--spacing-sm) var(--spacing-md);
     font: inherit;
     width: calc(100% - var(--spacing-lg));
