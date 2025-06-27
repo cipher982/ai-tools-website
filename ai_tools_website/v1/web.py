@@ -60,11 +60,10 @@ async def refresh_tools_background():
 
 # Components
 def tool_card(tool):
-    return Div(
+    return A(
+        {"href": tool["url"], "target": "_blank", "_class": "tool-card"},
         H5(tool["name"]),
         P(tool["description"]),
-        A({"href": tool["url"], "target": "_blank"}, "Visit Tool →"),
-        _class="tool-card",
         **{"data-search": f"{tool['name'].lower()} {tool['description'].lower()}"},
     )
 

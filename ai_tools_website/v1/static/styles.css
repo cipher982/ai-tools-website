@@ -105,7 +105,7 @@ body {
 
 #search:focus {
     outline: none;
-    border-color: var(--win98-dark-shadow) var(--taskman-green) var(--taskman-green) var(--win98-dark-shadow);
+    border-color: var(--win98-dark-shadow) var(--win98-highlight) var(--win98-highlight) var(--win98-dark-shadow);
 }
 
 #search::placeholder {
@@ -159,11 +159,15 @@ body {
     padding: var(--spacing-md);
     border: var(--border-raised);
     border-color: var(--border-raised-color);
+    text-decoration: none;
+    color: inherit;
+    display: block;
 }
 
 .tool-card:hover {
     border-color: var(--border-sunken-color);
     background: var(--win98-button-face);
+    text-decoration: none;
 }
 
 .tool-card h5 {
@@ -178,23 +182,6 @@ body {
     color: var(--win98-text);
 }
 
-.tool-card a {
-    background: var(--win98-button-face);
-    border: var(--border-button);
-    border-color: var(--border-button-color);
-    padding: var(--spacing-xs) var(--spacing-md);
-    font: inherit;
-    color: var(--win98-accent);
-    text-decoration: none;
-    display: inline-block;
-    cursor: pointer;
-    margin-top: var(--spacing-md);
-}
-
-.tool-card a:hover {
-    border-color: var(--border-button-pressed);
-    background: var(--win98-face);
-}
 
 .category {
     background: var(--win98-face);
@@ -238,6 +225,7 @@ body {
     font: inherit;
     width: calc(100% - var(--spacing-lg));
     margin-bottom: var(--spacing-lg);
+    border-radius: 0;
 }
 
 .github-corner {
