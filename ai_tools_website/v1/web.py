@@ -9,9 +9,10 @@ from fasthtml.common import H1
 from fasthtml.common import H2
 from fasthtml.common import H5
 from fasthtml.common import A
-from fasthtml.common import Container
+from fasthtml.common import Body
 from fasthtml.common import Div
 from fasthtml.common import Head
+from fasthtml.common import Html
 from fasthtml.common import Img
 from fasthtml.common import Input
 from fasthtml.common import Meta
@@ -20,6 +21,7 @@ from fasthtml.common import Script
 from fasthtml.common import Section
 from fasthtml.common import Span
 from fasthtml.common import StyleX
+from fasthtml.common import Title
 from fasthtml.fastapp import fast_app
 
 from ai_tools_website.v1.data_manager import load_tools
@@ -92,8 +94,9 @@ async def get():
     # Trigger background refresh
     asyncio.create_task(refresh_tools_background())
 
-    return Container(
+    return Html(
         Head(
+            Title("AI Tools Collection - Best AI Software & Applications"),
             Meta({"charset": "utf-8"}),
             Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
             Meta(
@@ -134,28 +137,29 @@ async def get():
                     "content": "Discover the best AI tools for productivity, content creation, development, and more.",
                 }
             ),
+            StyleX(str(Path(__file__).parent / "static/styles.css")),
         ),
-        StyleX(str(Path(__file__).parent / "static/styles.css")),
-        Div(
+        Body(
             Div(
-                A(
-                    {
-                        "href": "https://github.com/cipher982/ai-tools-website",
-                        "target": "_blank",
-                        "_class": "github-link",
-                    },
-                    Img({"src": "github-mark-white.svg", "alt": "GitHub", "width": "32", "height": "32"}),
+                Div(
+                    A(
+                        {
+                            "href": "https://github.com/cipher982/ai-tools-website",
+                            "target": "_blank",
+                            "_class": "github-link",
+                        },
+                        Img({"src": "github-mark-white.svg", "alt": "GitHub", "width": "32", "height": "32"}),
+                    ),
+                    _class="github-corner",
                 ),
-                _class="github-corner",
+                H1("AI Tools Collection", _class="window-title"),
+                P("A curated collection of AI tools, gathered by AI agents.", _class="intro"),
+                Input({"type": "search", "id": "search", "placeholder": "Search tools...", "_id": "search"}),
+                *sections,
+                _class="main-window",
             ),
-            H1("AI Tools Collection", _class="window-title"),
-            P("A curated collection of AI tools, gathered by AI agents.", _class="intro"),
-            Input({"type": "search", "id": "search", "placeholder": "Search tools...", "_id": "search"}),
-            *sections,
-            _class="main-window",
+            Script(src="search.js"),
         ),
-        Script(src="search.js"),
-        title="AI Tools Collection - Best AI Software & Applications",
     )
 
 

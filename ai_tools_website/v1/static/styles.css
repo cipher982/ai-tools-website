@@ -40,14 +40,24 @@ html {
 }
 
 /* Base Typography */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+
 body {
     background: var(--win98-desktop);
-    margin: 0;
     padding: var(--spacing-lg) var(--spacing-md);
     min-height: 100vh;
     color: var(--win98-text);
     font-family: "MS Sans Serif", "Tahoma", system-ui, sans-serif;
     font-size: 11px;
+    box-sizing: border-box;
+}
+
+*, *::before, *::after {
+    box-sizing: inherit;
 }
 
 .main-window {
