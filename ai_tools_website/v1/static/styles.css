@@ -1,126 +1,260 @@
 :root {
-    --bg-color: #1a1a1a;
-    --card-bg: #2d2d2d;
-    --text-primary: #e0e0e0;
-    --text-secondary: #b0b0b0;
-    --accent: #4a9eff;
-    --border-color: #404040;
+    /* Windows 98/2000 Color Palette */
+    --win98-face: #C3C3C3;
+    --win98-shadow: #818181;
+    --win98-highlight: #FDFFFF;
+    --win98-accent: #000080;
+    --win98-text: #000000;
+    --win98-text-light: #FFFFFF;
+    --win98-border: #808080;
+    --win98-dark-shadow: #404040;
+    --win98-button-face: #C0C0C0;
+    --win98-active-title: #0A246A;
+    --win98-inactive-title: #808080;
+    --taskman-bg: #000000;
+    --taskman-green: #00FF00;
+    
+    /* Spacing System */
+    --spacing-xs: 2px;
+    --spacing-sm: 4px;
+    --spacing-md: 8px;
+    --spacing-lg: 16px;
+    
+    /* Beveled Border Patterns */
+    --border-raised: 2px solid;
+    --border-raised-color: var(--win98-highlight) var(--win98-shadow) var(--win98-shadow) var(--win98-highlight);
+    --border-sunken: 2px solid;
+    --border-sunken-color: var(--win98-shadow) var(--win98-highlight) var(--win98-highlight) var(--win98-shadow);
+    --border-button: 1px solid;
+    --border-button-color: var(--win98-highlight) var(--win98-shadow) var(--win98-shadow) var(--win98-highlight);
+    --border-button-pressed: var(--win98-shadow) var(--win98-highlight) var(--win98-highlight) var(--win98-shadow);
 }
 
+/* Pixel-perfect rendering for authentic retro feel */
+html {
+    image-rendering: pixelated;
+    -webkit-font-smoothing: none;
+    font-smooth: never;
+    -moz-osx-font-smoothing: unset;
+}
+
+/* Base Typography */
 body {
-    background: var(--bg-color);
+    background: var(--win98-face);
     margin: 0;
-    padding: 1rem;
+    padding: var(--spacing-md);
     min-height: 100vh;
-    color: var(--text-primary);
-    max-width: 1400px;
+    color: var(--win98-text);
+    font-family: "MS Sans Serif", "Tahoma", system-ui, sans-serif;
+    font-size: 11px;
+    max-width: 1200px;
     margin: 0 auto;
 }
 
+/* Utility Classes */
+.window {
+    background: var(--win98-face);
+    border: var(--border-raised);
+    border-color: var(--border-raised-color);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.button {
+    background: var(--win98-button-face);
+    border: var(--border-button);
+    border-color: var(--border-button-color);
+    padding: var(--spacing-xs) var(--spacing-md);
+    font: inherit;
+    color: var(--win98-text);
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.button:hover {
+    border-color: var(--border-button-pressed);
+    background: var(--win98-face);
+}
+
+.button:active {
+    border-color: var(--border-button-pressed);
+    background: var(--win98-shadow);
+}
+
+.title-bar {
+    background: linear-gradient(90deg, var(--win98-active-title) 0%, var(--win98-accent) 100%);
+    color: var(--win98-text-light);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-weight: bold;
+    border: 1px solid var(--win98-border);
+    margin: 0 0 var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.input-sunken {
+    border: var(--border-sunken);
+    border-color: var(--border-sunken-color);
+    background: var(--win98-text-light);
+    color: var(--win98-text);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font: inherit;
+}
+
+.input-sunken:focus {
+    outline: none;
+    border-color: var(--win98-dark-shadow) var(--win98-text-light) var(--win98-text-light) var(--win98-dark-shadow);
+}
+
+.input-sunken::placeholder {
+    color: var(--win98-inactive-title);
+}
+
+/* Layout */
+.two-col {
+    display: table;
+    width: 100%;
+    border-spacing: var(--spacing-md) 0;
+}
+
+.two-col > * {
+    display: table-cell;
+    width: 50%;
+    vertical-align: top;
+}
+
+.three-col {
+    display: table;
+    width: 100%;
+    border-spacing: var(--spacing-md) 0;
+}
+
+.three-col > * {
+    display: table-cell;
+    width: 33.333%;
+    vertical-align: top;
+}
+
+/* Component Styles */
 .intro {
-    margin-bottom: 2rem;
-    color: var(--text-secondary);
-    font-size: 1.1rem;
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--win98-face);
+    border: var(--border-raised);
+    border-color: var(--border-raised-color);
 }
 
 .tools-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1rem;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
 }
 
 .tool-card {
-    background: var(--card-bg);
-    padding: 1rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    border: 1px solid var(--border-color);
-    transition: transform 0.2s ease, border-color 0.2s ease;
+    background: var(--win98-face);
+    padding: var(--spacing-md);
+    border: var(--border-raised);
+    border-color: var(--border-raised-color);
 }
 
 .tool-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--accent);
+    border-color: var(--border-sunken-color);
+    background: var(--win98-button-face);
 }
 
 .tool-card h5 {
-    margin: 0 0 0.5rem;
-    font-size: 1.1rem;
-    color: var(--text-primary);
+    margin: 0 0 var(--spacing-sm);
+    font-weight: bold;
 }
 
 .tool-card p {
-    margin: 0;
-    color: var(--text-secondary);
-    line-height: 1.4;
+    margin: 0 0 var(--spacing-md);
+    line-height: 1.3;
 }
 
 .tool-card a {
-    display: inline-block;
-    margin-top: 1rem;
+    background: var(--win98-button-face);
+    border: var(--border-button);
+    border-color: var(--border-button-color);
+    padding: var(--spacing-xs) var(--spacing-md);
+    font: inherit;
+    color: var(--win98-accent);
     text-decoration: none;
-    color: var(--accent);
+    display: inline-block;
+    cursor: pointer;
+    margin-top: var(--spacing-md);
 }
 
 .tool-card a:hover {
-    text-decoration: underline;
+    border-color: var(--border-button-pressed);
+    background: var(--win98-face);
 }
 
 .category {
-    margin-bottom: 2rem;
+    background: var(--win98-face);
+    border: var(--border-raised);
+    border-color: var(--border-raised-color);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
 }
 
 .category h2 {
-    margin: 0 0 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-color);
-    color: var(--text-primary);
+    background: linear-gradient(90deg, var(--win98-active-title) 0%, var(--win98-accent) 100%);
+    color: var(--win98-text-light);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-weight: bold;
+    border: 1px solid var(--win98-border);
+    margin: 0 0 var(--spacing-md);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
 }
 
 .count {
-    background: var(--accent);
-    color: var(--bg-color);
-    padding: 0.2rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.8rem;
+    background: var(--win98-button-face);
+    border: var(--border-button);
+    border-color: var(--border-button-color);
+    padding: var(--spacing-xs) var(--spacing-md);
+    font: inherit;
+    color: var(--win98-text);
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
     font-weight: bold;
 }
 
 #search {
-    width: 100%;
-    padding: 0.8rem;
-    margin-bottom: 2rem;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background: var(--card-bg);
-    color: var(--text-primary);
-    font-size: 1rem;
-    transition: border-color 0.2s ease;
-}
-
-#search:focus {
-    outline: none;
-    border-color: var(--accent);
-}
-
-#search::placeholder {
-    color: var(--text-secondary);
+    border: var(--border-sunken);
+    border-color: var(--border-sunken-color);
+    background: var(--win98-text-light);
+    color: var(--win98-text);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font: inherit;
+    width: calc(100% - var(--spacing-lg));
+    margin-bottom: var(--spacing-lg);
 }
 
 .github-corner {
     position: absolute;
-    top: 1rem;
-    right: 1rem;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    background: var(--win98-button-face);
+    border: var(--border-raised);
+    border-color: var(--border-raised-color);
+    padding: var(--spacing-sm);
+}
+
+.github-corner:hover {
+    border-color: var(--border-sunken-color);
+    background: var(--win98-face);
 }
 
 .github-corner img {
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
-}
-
-.github-corner:hover img {
+    width: 16px;
+    height: 16px;
+    image-rendering: pixelated;
     opacity: 1;
-} 
+}
