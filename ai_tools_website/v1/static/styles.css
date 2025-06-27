@@ -13,6 +13,7 @@
     --win98-inactive-title: #808080;
     --taskman-bg: #000000;
     --taskman-green: #00FF00;
+    --win98-desktop: #008080;
     
     /* Spacing System */
     --spacing-xs: 2px;
@@ -40,15 +41,41 @@ html {
 
 /* Base Typography */
 body {
-    background: var(--win98-face);
+    background: var(--win98-desktop);
     margin: 0;
-    padding: var(--spacing-md);
+    padding: var(--spacing-lg) var(--spacing-md);
     min-height: 100vh;
     color: var(--win98-text);
     font-family: "MS Sans Serif", "Tahoma", system-ui, sans-serif;
     font-size: 11px;
+}
+
+.main-window {
+    background: var(--win98-face);
     max-width: 1200px;
     margin: 0 auto;
+    padding: var(--spacing-md);
+    border: var(--border-raised);
+    border-color: var(--border-raised-color);
+    box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3);
+    position: relative;
+}
+
+.window-title {
+    color: var(--win98-text);
+    margin: 0 0 var(--spacing-lg);
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* Fallback for any h1 that might still appear due to caching */
+h1 {
+    color: var(--win98-text) !important;
+    margin: 0 0 var(--spacing-lg) !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+    text-align: center !important;
 }
 
 /* Utility Classes */

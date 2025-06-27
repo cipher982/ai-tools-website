@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict
 
 from dotenv import load_dotenv
+from fasthtml.common import H1
 from fasthtml.common import H2
 from fasthtml.common import H5
 from fasthtml.common import A
@@ -17,7 +18,6 @@ from fasthtml.common import Script
 from fasthtml.common import Section
 from fasthtml.common import Span
 from fasthtml.common import StyleX
-from fasthtml.common import Titled
 from fasthtml.fastapp import fast_app
 
 from ai_tools_website.v1.data_manager import load_tools
@@ -90,10 +90,9 @@ async def get():
     # Trigger background refresh
     asyncio.create_task(refresh_tools_background())
 
-    return Titled(
-        "AI Tools Collection",
-        Container(
-            StyleX(str(Path(__file__).parent / "static/styles.css")),
+    return Container(
+        StyleX(str(Path(__file__).parent / "static/styles.css")),
+        Div(
             Div(
                 A(
                     {
@@ -105,11 +104,14 @@ async def get():
                 ),
                 _class="github-corner",
             ),
+            H1("AI Tools Collection", _class="window-title"),
             P("A curated collection of AI tools, gathered by AI agents.", _class="intro"),
             Input({"type": "search", "id": "search", "placeholder": "Search tools...", "_id": "search"}),
             *sections,
-            Script(src="search.js"),
+            _class="main-window",
         ),
+        Script(src="search.js"),
+        title="AI Tools Collection",
     )
 
 
@@ -124,4 +126,4 @@ if __name__ == "__main__":
 
     port = int(os.getenv("WEB_PORT", "8000"))
     print(f"Starting server on port {port}")
-    uvicorn.run("ai_tools_website.web:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("ai_tools_website.v1.web:app", host="0.0.0.0", port=port, reload=True)
