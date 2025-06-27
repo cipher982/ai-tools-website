@@ -11,8 +11,10 @@ from fasthtml.common import H5
 from fasthtml.common import A
 from fasthtml.common import Container
 from fasthtml.common import Div
+from fasthtml.common import Head
 from fasthtml.common import Img
 from fasthtml.common import Input
+from fasthtml.common import Meta
 from fasthtml.common import P
 from fasthtml.common import Script
 from fasthtml.common import Section
@@ -91,6 +93,48 @@ async def get():
     asyncio.create_task(refresh_tools_background())
 
     return Container(
+        Head(
+            Meta({"charset": "utf-8"}),
+            Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
+            Meta(
+                {
+                    "name": "description",
+                    "content": (
+                        "Discover the best AI tools for productivity, content creation, development, and more. "
+                        "A curated collection of artificial intelligence tools gathered by AI agents."
+                    ),
+                }
+            ),
+            Meta(
+                {
+                    "name": "keywords",
+                    "content": (
+                        "AI tools, artificial intelligence, productivity tools, AI software, "
+                        "machine learning tools, automation"
+                    ),
+                }
+            ),
+            Meta({"name": "robots", "content": "index, follow"}),
+            Meta({"property": "og:title", "content": "AI Tools Collection - Best AI Software & Applications"}),
+            Meta(
+                {
+                    "property": "og:description",
+                    "content": (
+                        "Discover the best AI tools for productivity, content creation, development, and more. "
+                        "A curated collection of artificial intelligence tools."
+                    ),
+                }
+            ),
+            Meta({"property": "og:type", "content": "website"}),
+            Meta({"name": "twitter:card", "content": "summary_large_image"}),
+            Meta({"name": "twitter:title", "content": "AI Tools Collection - Best AI Software & Applications"}),
+            Meta(
+                {
+                    "name": "twitter:description",
+                    "content": "Discover the best AI tools for productivity, content creation, development, and more.",
+                }
+            ),
+        ),
         StyleX(str(Path(__file__).parent / "static/styles.css")),
         Div(
             Div(
@@ -111,7 +155,7 @@ async def get():
             _class="main-window",
         ),
         Script(src="search.js"),
-        title="AI Tools Collection",
+        title="AI Tools Collection - Best AI Software & Applications",
     )
 
 
