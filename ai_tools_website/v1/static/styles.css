@@ -286,3 +286,97 @@ h1 {
     image-rendering: pixelated;
     opacity: 1;
 }
+
+/* SEO Pages Styling */
+.breadcrumbs {
+    font-size: 11px;
+    color: var(--win98-text);
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-sm);
+    background: var(--win98-face);
+    border: var(--border-sunken);
+    border-color: var(--border-sunken-color);
+}
+
+.breadcrumbs a {
+    color: var(--win98-accent);
+    text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+    text-decoration: underline;
+}
+
+.tool-title, .category-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: var(--spacing-lg);
+    color: var(--win98-text);
+}
+
+.tool-layout {
+    display: grid;
+    grid-template-columns: 1fr 250px;
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-lg);
+}
+
+.tool-content {
+    background: var(--win98-face);
+    border: var(--border-sunken);
+    border-color: var(--border-sunken-color);
+    padding: var(--spacing-lg);
+}
+
+.sidebar {
+    background: var(--win98-face);
+    border: var(--border-sunken);
+    border-color: var(--border-sunken-color);
+    padding: var(--spacing-md);
+    height: fit-content;
+}
+
+.related-tools {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.related-tools .tool-card {
+    font-size: 10px;
+    padding: var(--spacing-sm);
+}
+
+.cta-button {
+    background: var(--win98-button-face);
+    border: var(--border-button);
+    border-color: var(--border-button-color);
+    padding: var(--spacing-md) var(--spacing-lg);
+    color: var(--win98-text);
+    text-decoration: none;
+    font-weight: bold;
+    display: inline-block;
+    margin-top: var(--spacing-lg);
+}
+
+.cta-button:hover {
+    border-color: var(--border-button-pressed);
+    background: var(--win98-face);
+}
+
+.category-intro {
+    margin-bottom: var(--spacing-lg);
+    font-size: 12px;
+    color: var(--win98-text);
+}
+
+/* Mobile responsiveness for SEO pages */
+@media (max-width: 768px) {
+    .tool-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        order: -1;
+    }
+}
