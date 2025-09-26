@@ -2,6 +2,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 
+from ..v1.models import WEB_SEARCH_MODEL
+
 
 async def openai_search(query: str) -> List[Dict]:
     """Search for results using OpenAI's web search API.
@@ -17,7 +19,7 @@ async def openai_search(query: str) -> List[Dict]:
     client = OpenAI()
 
     response = client.responses.create(
-        model="gpt-4o",
+        model=WEB_SEARCH_MODEL,
         tools=[{"type": "web_search_preview"}],
         input=query,
         tool_choice={"type": "web_search_preview"},

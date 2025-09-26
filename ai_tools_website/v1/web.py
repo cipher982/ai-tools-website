@@ -105,6 +105,51 @@ def get_base_url() -> str:
     return os.getenv("BASE_URL", "https://ai-tools.dev")
 
 
+def render_tool_sections(tool: dict) -> list:
+    """Create enhanced content blocks for a tool detail page."""
+    enhanced = tool.get("enhanced_content") or {}
+    blocks = []
+
+    overview = enhanced.get("overview")
+    if overview and overview.get("body"):
+        blocks.append(H2(overview.get("heading", "Overview")))
+        blocks.append(P(overview["body"]))
+    else:
+        blocks.append(H2("Overview"))
+        blocks.append(P(tool.get("description", "")))
+
+    features = enhanced.get("key_features") or {}
+    feature_items = features.get("items") or []
+    if feature_items:
+        blocks.append(H3(features.get("heading", "Key Features")))
+        blocks.append(Ul(*[Li(item) for item in feature_items]))
+
+    use_cases = enhanced.get("use_cases") or {}
+    use_case_items = use_cases.get("items") or []
+    if use_case_items:
+        blocks.append(H3(use_cases.get("heading", "Ideal Use Cases")))
+        blocks.append(Ul(*[Li(item) for item in use_case_items]))
+
+    getting_started = enhanced.get("getting_started") or {}
+    steps = getting_started.get("steps") or []
+    if steps:
+        blocks.append(H3(getting_started.get("heading", "Getting Started")))
+        blocks.append(Ul(*[Li(step) for step in steps]))
+
+    pricing = enhanced.get("pricing") or {}
+    if pricing.get("details"):
+        blocks.append(H3(pricing.get("heading", "Pricing")))
+        blocks.append(P(pricing["details"]))
+
+    limitations = enhanced.get("limitations") or {}
+    limitation_items = limitations.get("items") or []
+    if limitation_items:
+        blocks.append(H3(limitations.get("heading", "Limitations")))
+        blocks.append(Ul(*[Li(item) for item in limitation_items]))
+
+    return blocks
+
+
 # Components
 def tool_card(tool):
     """Tool card component that links to internal tool page"""
@@ -261,6 +306,7 @@ async def get_tool_page(slug: str):
     category = tool.get("category", "Other")
     tools_by_category = get_tools_by_category()
     related_tools = [t for t in tools_by_category.get(category, []) if generate_tool_slug(t["name"]) != slug][:6]
+    content_blocks = render_tool_sections(tool)
 
     return Html(
         Head(
@@ -292,8 +338,7 @@ async def get_tool_page(slug: str):
                 H1(f"{tool['name']} - AI {category} Tool", _class="tool-title"),
                 Div(
                     Div(
-                        H2("Overview"),
-                        P(tool["description"]),
+                        *content_blocks,
                         H3("Key Information"),
                         Ul(
                             Li(f"Category: {category}"),

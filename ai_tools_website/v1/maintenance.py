@@ -10,11 +10,10 @@ from pydantic import Field
 from .data_manager import load_tools
 from .data_manager import save_tools
 from .logging_config import setup_logging
+from .models import MAINTENANCE_MODEL
 from .search import build_category_context
 from .search import client
 from .search import smart_deduplicate_tools
-
-MODEL_NAME = "o3"
 
 
 class CategoryChange(BaseModel):
@@ -55,7 +54,7 @@ async def recategorize_database(auto_accept: bool = False) -> None:
     categories_text = build_category_context(current)
 
     completion = client.beta.chat.completions.parse(
-        model=MODEL_NAME,
+        model=MAINTENANCE_MODEL,
         reasoning_effort="low",
         messages=[
             {

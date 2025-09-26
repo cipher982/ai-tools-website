@@ -25,6 +25,7 @@ from .data_manager import load_tools
 from .data_manager import save_tools
 from .logging_config import IndentLogger
 from .logging_config import setup_logging
+from .models import SEARCH_MODEL
 
 load_dotenv()
 
@@ -35,7 +36,6 @@ logger = IndentLogger(base_logger)
 client = wrap_openai(OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
 tavily_client = TavilyClient(os.getenv("TAVILY_API_KEY"))
 
-MODEL_NAME = "o3-mini"
 
 # Cache settings
 CACHE_TIMEOUT = 60 * 60 * 24  # 24 hours
@@ -128,7 +128,7 @@ async def normalize_category(suggested_category: str, current_tools: Dict) -> st
     categories_text = build_category_context(current_tools)
 
     completion = client.chat.completions.create(
-        model=MODEL_NAME,
+        model=SEARCH_MODEL,
         messages=[
             {
                 "role": "system",
@@ -179,7 +179,7 @@ async def analyze_page_content(*, url: str, title: str, content: str, current_to
         categories_context = "\n\n".join(categories_text)
 
         completion = client.beta.chat.completions.parse(
-            model=MODEL_NAME,
+            model=SEARCH_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -283,7 +283,7 @@ async def analyze_search_results(search_results: List[Dict], current_tools: Dict
     try:
         logger.info(f"Filtering {len(search_results)} results")
         completion = client.chat.completions.create(
-            model=MODEL_NAME,
+            model=SEARCH_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -355,7 +355,7 @@ async def filter_results(search_results: List[Dict]) -> List[ToolUpdate]:
         )
 
         completion = client.beta.chat.completions.parse(
-            model=MODEL_NAME,
+            model=SEARCH_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -435,7 +435,7 @@ async def verify_tool(candidate: ToolUpdate, current_tools: Dict) -> Optional[To
 
             # Analyze
             completion = client.beta.chat.completions.parse(
-                model=MODEL_NAME,
+                model=SEARCH_MODEL,
                 messages=[
                     {
                         "role": "system",
@@ -654,7 +654,7 @@ async def check_duplicate_status(
 
     # If we found a potential match, use LLM to compare
     completion = client.beta.chat.completions.parse(
-        model=MODEL_NAME,
+        model=SEARCH_MODEL,
         messages=[
             {
                 "role": "system",

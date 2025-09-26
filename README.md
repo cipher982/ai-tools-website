@@ -115,6 +115,11 @@ The updater service (`Dockerfile.updater`) implements:
 3. Health monitoring of the update process
 4. Configurable update frequency via crontab
 
+### Content Enhancement Process
+- Weekly Supercronic job calls `run-enhancement.sh`, which executes `uv run python -m ai_tools_website.v1.content_enhancer` inside the updater container.
+- The enhancer enriches tool records in-place with optional `enhanced_content` sections and timestamps (`enhanced_at`).
+- Regeneration limits (`CONTENT_ENHANCER_MAX_PER_RUN`, `CONTENT_ENHANCER_STALE_DAYS`) are configurable. `CONTENT_ENHANCER_MODEL` **must** be set in the environment; the application exits if it is missing.
+
 ### Storage Implementation
 The system implements a flexible storage system:
 
@@ -212,10 +217,12 @@ When running the search module:
 - `--cache-searches`: Cache Tavily search results for faster iteration
 - `--dry-run`: Run without saving any changes
 
-### AI Service Integration
 - `OPENAI_API_KEY`: OpenAI API key for enhanced search
 - `TAVILY_API_KEY`: Tavily API key for additional search features
-- `MODEL_NAME`: OpenAI model to use (default: "gpt-4-turbo-preview")
+- `CONTENT_ENHANCER_MODEL`: Model for content enhancement (required, no default)
+- `SEARCH_MODEL`: Model for search and deduplication (required, no default)
+- `MAINTENANCE_MODEL`: Model for maintenance tasks (required, no default)
+- `WEB_SEARCH_MODEL`: Model for web search API calls (required, no default)
 - `LANGCHAIN_API_KEY`: Optional LangChain integration
 - `LANGCHAIN_TRACING_V2`: Enable LangChain tracing (default: false)
 - `LANGCHAIN_PROJECT`: LangChain project name
