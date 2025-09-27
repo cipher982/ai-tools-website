@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from datetime import timezone
 from pathlib import Path
 from typing import Dict
 
@@ -150,6 +151,31 @@ def render_tool_sections(tool: dict) -> list:
     return blocks
 
 
+PIPELINE_STATUS_PATH = Path(__file__).parent / "static" / "pipeline_status.json"
+
+
+def _load_pipeline_status_snapshot() -> dict | None:
+    if not PIPELINE_STATUS_PATH.exists():
+        logger.info("Pipeline status snapshot missing at %s", PIPELINE_STATUS_PATH)
+        return None
+    try:
+        with PIPELINE_STATUS_PATH.open() as handle:
+            return json.load(handle)
+    except json.JSONDecodeError as exc:
+        logger.warning("Failed to parse pipeline status snapshot: %s", exc)
+        return None
+
+
+def _format_timestamp(value: str | None) -> str:
+    if not value:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
 # Components
 def tool_card(tool):
     """Tool card component that links to internal tool page"""
@@ -194,6 +220,117 @@ def category_section(name, tools, use_internal_links=False):
 
 # App setup
 app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
+
+
+status_styles = StyleX(
+    """
+    .pipeline-page { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; font-family: Inter, system-ui, sans-serif; }
+    .pipeline-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap;
+                       gap: 0.5rem; }
+    .pipeline-grid { display: grid; gap: 1.5rem; margin-top: 1.5rem;
+                     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .pipeline-card { border: 1px solid #d0d7de; border-radius: 12px; padding: 1.25rem; background: #fff;
+                     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; gap: 0.5rem; }
+    .pipeline-card.status-success { border-color: #22c55e; }
+    .pipeline-card.status-error { border-color: #ef4444; }
+    .pipeline-card.status-missing, .pipeline-card.status-unknown { border-color: #9ca3af; }
+    .pipeline-card.status-stale { box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.25); }
+    .status-pill { display: inline-flex; align-items: center; padding: 0.15rem 0.6rem; border-radius: 999px;
+                   font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+    .pipeline-card.status-success .status-pill { color: #166534; background: rgba(34, 197, 94, 0.16); }
+    .pipeline-card.status-error .status-pill { color: #991b1b; background: rgba(239, 68, 68, 0.18); }
+    .pipeline-card.status-missing .status-pill,
+    .pipeline-card.status-unknown .status-pill { color: #374151; background: rgba(156, 163, 175, 0.24); }
+    .status-note { font-size: 0.75rem; color: #b45309; font-weight: 600; }
+    .meta-row { font-size: 0.85rem; color: #475569; }
+    .metrics-list, .attributes-list { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; color: #1f2937; }
+    .section-title { margin-top: 0.5rem; font-size: 0.9rem; font-weight: 600; color: #111827; }
+    .empty-state { font-size: 0.9rem; color: #6b7280; font-style: italic; }
+    body { background: #f8fafc; }
+    a.back-link { color: #2563eb; font-size: 0.9rem; }
+    .generated-at { font-size: 0.85rem; color: #475569; }
+    """
+)
+
+
+@rt("/pipeline-status")
+async def pipeline_status():
+    snapshot = _load_pipeline_status_snapshot()
+    pipelines = snapshot.get("pipelines", []) if snapshot else []
+    generated_at = _format_timestamp(snapshot.get("generated_at")) if snapshot else None
+
+    cards = []
+    if not pipelines:
+        cards.append(Div(P("No pipeline runs recorded yet."), _class="pipeline-card status-missing"))
+    else:
+        for entry in pipelines:
+            pipeline_key = entry.get("pipeline", "unknown")
+            pipeline_label = pipeline_key.replace("_", " ").title()
+            status_value = entry.get("status", "unknown")
+            status_label = status_value.replace("_", " ").title()
+            card_classes = ["pipeline-card", f"status-{status_value}"]
+            if entry.get("stale"):
+                card_classes.append("status-stale")
+
+            components = [
+                Div(
+                    H2(pipeline_label),
+                    Span(status_label, _class="status-pill"),
+                    _class="pipeline-header",
+                ),
+                P(f"Started: {_format_timestamp(entry.get('started_at'))}", _class="meta-row"),
+                P(f"Finished: {_format_timestamp(entry.get('finished_at'))}", _class="meta-row"),
+                P(f"Duration: {entry.get('duration_seconds', '—')}s", _class="meta-row"),
+            ]
+
+            if entry.get("stale"):
+                components.append(Span("Stale data – older than 6 hours", _class="status-note"))
+
+            error_type = entry.get("error_type") or entry.get("error_note")
+            if error_type:
+                components.append(P(f"Last error: {error_type}", _class="status-note"))
+
+            metrics = entry.get("metrics") or {}
+            components.append(H3("Metrics", _class="section-title"))
+            if metrics:
+                metric_items = [
+                    Li(f"{key.replace('_', ' ').title()}: {value}") for key, value in sorted(metrics.items())
+                ]
+                components.append(Ul(*metric_items, _class="metrics-list"))
+            else:
+                components.append(P("No metrics reported", _class="empty-state"))
+
+            attributes = entry.get("attributes") or {}
+            if attributes:
+                components.append(H3("Attributes", _class="section-title"))
+                attribute_items = [
+                    Li(f"{key.replace('_', ' ').title()}: {value}") for key, value in sorted(attributes.items())
+                ]
+                components.append(Ul(*attribute_items, _class="attributes-list"))
+
+            cards.append(Div(*components, _class=" ".join(card_classes)))
+
+    content = Div(
+        Div(
+            A("← Back", href="/", _class="back-link"),
+            H1("Pipeline Status"),
+            P(
+                "Snapshot of our automated jobs. Data refreshes whenever the pipelines emit new summaries.",
+            ),
+            P(f"Updated: {generated_at}" if generated_at else "Updated: —", _class="generated-at"),
+            Div(*cards, _class="pipeline-grid"),
+            _class="pipeline-page",
+        ),
+    )
+
+    return Html(
+        Head(
+            Title("Pipeline Status"),
+            Meta(name="robots", content="index,follow"),
+            status_styles,
+        ),
+        Body(content),
+    )
 
 
 @rt("/")

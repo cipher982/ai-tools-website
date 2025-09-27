@@ -10,6 +10,7 @@ from pydantic import Field
 from .data_manager import load_tools
 from .data_manager import save_tools
 from .logging_config import setup_logging
+from .logging_utils import pipeline_summary
 from .models import MAINTENANCE_MODEL
 from .search import build_category_context
 from .search import client
@@ -45,21 +46,24 @@ logger = logging.getLogger(__name__)
 
 async def recategorize_database(auto_accept: bool = False) -> None:
     """Do a complete review and reorganization of tool categories."""
-    logger.info("Starting tool recategorization...")
-    current = load_tools()
-    total = len(current["tools"])
-    logger.info(f"Processing {total} tools")
+    with pipeline_summary("maintenance") as summary:
+        logger.info("Starting tool recategorization...")
+        current = load_tools()
+        total = len(current["tools"])
+        logger.info(f"Processing {total} tools")
+        summary.add_metric("total_tools", total)
+        summary.add_attribute("auto_accept", auto_accept)
 
-    # Get AI to analyze current categorization and suggest improvements
-    categories_text = build_category_context(current)
+        # Get AI to analyze current categorization and suggest improvements
+        categories_text = build_category_context(current)
 
-    completion = client.beta.chat.completions.parse(
-        model=MAINTENANCE_MODEL,
-        reasoning_effort="low",
-        messages=[
-            {
-                "role": "system",
-                "content": """You are an expert at organizing AI tools into meaningful categories.
+        completion = client.beta.chat.completions.parse(
+            model=MAINTENANCE_MODEL,
+            reasoning_effort="low",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an expert at organizing AI tools into meaningful categories.
 Your task is to analyze the current categorization and suggest improvements.
 Consider:
 1. Categories that could be merged (e.g., 'LLMs' and 'Language Models')
@@ -80,91 +84,108 @@ IMPORTANT RULES FOR CATEGORY NAMES:
 
 
 """,
-            },
-            {
-                "role": "user",
-                "content": f"""Here is our current database of tools organized by category:
+                },
+                {
+                    "role": "user",
+                    "content": f"""Here is our current database of tools organized by category:
 
 {categories_text}
 
 Analyze this categorization and suggest a revised category structure.""",
-            },
-        ],
-        response_format=RecategorizationChanges,
-    )
+                },
+            ],
+            response_format=RecategorizationChanges,
+        )
 
-    changes = completion.choices[0].message.parsed
-    logger.info("\nProposed reorganization changes:")
+        changes = completion.choices[0].message.parsed
+        logger.info("\nProposed reorganization changes:")
 
-    if not changes.category_changes and not changes.tool_moves:
-        logger.info("No changes suggested, categories look good!")
-        return
+        summary.add_metric("proposed_category_changes", len(changes.category_changes))
+        summary.add_metric("proposed_tool_moves", len(changes.tool_moves))
 
-    if changes.category_changes:
-        logger.info("\nCategory renames:")
-        for change in changes.category_changes:
-            logger.info(f"  • {change.from_category} -> {change.to_category}")
-            logger.info(f"    Reason: {change.reason}")
-
-    if changes.tool_moves:
-        logger.info("\nTool moves:")
-        for move in changes.tool_moves:
-            logger.info(f"  • {move.tool}: {move.from_category} -> {move.to_category}")
-            logger.info(f"    Reason: {move.reason}")
-
-    # Get user confirmation if not auto-accepting
-    if not auto_accept:
-        response = input("\nApply these changes? (y/n): ").lower().strip()
-        if response != "y":
-            logger.info("Changes cancelled.")
+        if not changes.category_changes and not changes.tool_moves:
+            logger.info("No changes suggested, categories look good!")
+            summary.add_attribute("no_changes", True)
             return
-    else:
-        logger.info("Auto-accepting changes...")
 
-    logger.info("Applying changes...")
-    updated_tools = []
+        if changes.category_changes:
+            logger.info("\nCategory renames:")
+            for change in changes.category_changes:
+                logger.info(f"  • {change.from_category} -> {change.to_category}")
+                logger.info(f"    Reason: {change.reason}")
 
-    # Create mapping of old -> new categories
-    category_map = {c.from_category: c.to_category for c in changes.category_changes}
+        if changes.tool_moves:
+            logger.info("\nTool moves:")
+            for move in changes.tool_moves:
+                logger.info(f"  • {move.tool}: {move.from_category} -> {move.to_category}")
+                logger.info(f"    Reason: {move.reason}")
 
-    # Create mapping of tool -> new category
-    tool_map = {m.tool: m.to_category for m in changes.tool_moves}
+        # Get user confirmation if not auto-accepting
+        if not auto_accept:
+            response = input("\nApply these changes? (y/n): ").lower().strip()
+            if response != "y":
+                logger.info("Changes cancelled.")
+                summary.add_attribute("cancelled", True)
+                return
+        else:
+            logger.info("Auto-accepting changes...")
 
-    for tool in current["tools"]:
-        new_tool = tool.copy()
-        current_cat = tool.get("category", "Other")
+        logger.info("Applying changes...")
+        updated_tools = []
 
-        # Check if tool should move
-        if tool["name"] in tool_map:
-            new_tool["category"] = tool_map[tool["name"]]
-            logger.info(f"Moving {tool['name']} to {new_tool['category']}")
-        # Check if category should change
-        elif current_cat in category_map:
-            new_tool["category"] = category_map[current_cat]
-            logger.info(f"Updating category for {tool['name']}: {current_cat} -> {new_tool['category']}")
+        # Create mapping of old -> new categories
+        category_map = {c.from_category: c.to_category for c in changes.category_changes}
 
-        updated_tools.append(new_tool)
+        # Create mapping of tool -> new category
+        tool_map = {m.tool: m.to_category for m in changes.tool_moves}
 
-    # Save changes
-    current["tools"] = updated_tools
-    save_tools(current)
-    logger.info("Reorganization complete!")
+        moved_count = 0
+        renamed_count = 0
+
+        for tool in current["tools"]:
+            new_tool = tool.copy()
+            current_cat = tool.get("category", "Other")
+
+            # Check if tool should move
+            if tool["name"] in tool_map:
+                new_tool["category"] = tool_map[tool["name"]]
+                moved_count += 1
+                logger.info(f"Moving {tool['name']} to {new_tool['category']}")
+            # Check if category should change
+            elif current_cat in category_map:
+                new_tool["category"] = category_map[current_cat]
+                renamed_count += 1
+                logger.info(f"Updating category for {tool['name']}: {current_cat} -> {new_tool['category']}")
+
+            updated_tools.append(new_tool)
+
+        # Save changes
+        current["tools"] = updated_tools
+        save_tools(current)
+        summary.add_metric("tools_reassigned", moved_count)
+        summary.add_metric("tools_renamed", renamed_count)
+        logger.info("Reorganization complete!")
 
 
 async def deduplicate_database() -> None:
     """One-time cleanup to deduplicate the tools database."""
-    logger.info("Starting database deduplication...")
-    current = load_tools()
-    total = len(current["tools"])
-    logger.info(f"Processing {total} tools")
+    with pipeline_summary("maintenance_deduplicate") as summary:
+        logger.info("Starting database deduplication...")
+        current = load_tools()
+        total = len(current["tools"])
+        logger.info(f"Processing {total} tools")
+        summary.add_metric("total_tools", total)
 
-    cleaned_tools = await smart_deduplicate_tools(current["tools"])
+        cleaned_tools = await smart_deduplicate_tools(current["tools"])
 
-    # Save cleaned database
-    logger.info(f"Removed {total - len(cleaned_tools)} duplicates")
-    current["tools"] = cleaned_tools
-    save_tools(current)
-    logger.info("Deduplication complete!")
+        # Save cleaned database
+        removed = total - len(cleaned_tools)
+        logger.info(f"Removed {removed} duplicates")
+        current["tools"] = cleaned_tools
+        save_tools(current)
+        summary.add_metric("duplicates_removed", removed)
+        summary.add_metric("final_total", len(cleaned_tools))
+        logger.info("Deduplication complete!")
 
 
 if __name__ == "__main__":

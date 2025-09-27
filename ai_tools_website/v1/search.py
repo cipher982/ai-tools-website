@@ -25,6 +25,7 @@ from .data_manager import load_tools
 from .data_manager import save_tools
 from .logging_config import IndentLogger
 from .logging_config import setup_logging
+from .logging_utils import pipeline_summary
 from .models import SEARCH_MODEL
 
 load_dotenv()
@@ -529,101 +530,117 @@ def deduplicate_tools(tools: List[Dict]) -> List[Dict]:
 
 async def find_new_tools(*, use_search_cache: bool = False, dry_run: bool = False) -> List[ToolUpdate]:
     """Find and verify new AI tools."""
-    logger.info("Starting tool discovery")
-    logger.indent()
+    with pipeline_summary("discovery") as summary:
+        logger.info("Starting tool discovery")
+        logger.indent()
 
-    # Load data once at start
-    current_tools = load_tools()
-    logger.info(f"Loaded {len(current_tools['tools'])} existing tools")
+        summary.add_attribute("dry_run", dry_run)
+        summary.add_attribute("use_search_cache", use_search_cache)
 
-    # Set up cache if search caching is enabled
-    global cache
-    cache = Cache("search_cache", size_limit=CACHE_SIZE, timeout=CACHE_TIMEOUT) if use_search_cache else None
+        # Load data once at start
+        current_tools = load_tools()
+        existing_total = len(current_tools["tools"])
+        logger.info(f"Loaded {existing_total} existing tools")
+        summary.add_metric("existing_tools", existing_total)
 
-    # Define queries based on mode
-    queries = [
-        "site:producthunt.com new AI tool launch",
-        "site:github.com new AI tool release",
-        "site:huggingface.co/spaces new",
-        "site:replicate.com new model",
-        "site:venturebeat.com new AI tool launch",
-        "new AI tool beta access",
-        "released new artificial intelligence tool",
-        "open source AI tool release",
-        "new AI model release",
-        "Best AI tools 2025",
-        "Top open-source AI models",
-    ]
+        # Set up cache if search caching is enabled
+        global cache
+        cache = Cache("search_cache", size_limit=CACHE_SIZE, timeout=CACHE_TIMEOUT) if use_search_cache else None
 
-    # Parallel search phase
-    logger.info(f"Running {len(queries)} parallel searches")
-    search_results = await asyncio.gather(*[tavily_search(query) for query in queries])
-    all_results = [r for results in search_results for r in results]  # Flatten
-    logger.info(f"Found {len(all_results)} total results")
+        # Define queries based on mode
+        queries = [
+            "site:producthunt.com new AI tool launch",
+            "site:github.com new AI tool release",
+            "site:huggingface.co/spaces new",
+            "site:replicate.com new model",
+            "site:venturebeat.com new AI tool launch",
+            "new AI tool beta access",
+            "released new artificial intelligence tool",
+            "open source AI tool release",
+            "new AI model release",
+            "Best AI tools 2025",
+            "Top open-source AI models",
+        ]
+        summary.add_metric("query_count", len(queries))
 
-    # Parallel filter phase
-    logger.info("Filtering candidates in parallel")
-    candidates = await filter_results(all_results)
-    logger.info(f"Identified {len(candidates)} potential tools")
+        # Parallel search phase
+        logger.info(f"Running {len(queries)} parallel searches")
+        search_results = await asyncio.gather(*[tavily_search(query) for query in queries])
+        all_results = [r for results in search_results for r in results]  # Flatten
+        total_results = len(all_results)
+        logger.info(f"Found {total_results} total results")
+        summary.add_metric("search_results", total_results)
 
-    # Parallel verify phase
-    logger.info("Verifying candidates in parallel")
-    verified = await asyncio.gather(*[verify_tool(candidate, current_tools) for candidate in candidates])
-    verified = [v for v in verified if v]  # Remove None results
+        # Parallel filter phase
+        logger.info("Filtering candidates in parallel")
+        candidates = await filter_results(all_results)
+        candidate_total = len(candidates)
+        logger.info(f"Identified {candidate_total} potential tools")
+        summary.add_metric("candidates", candidate_total)
 
-    # Log verification results by status
-    by_status = defaultdict(list)
-    for result in verified:
-        by_status[result.action].append(result)
+        # Parallel verify phase
+        logger.info("Verifying candidates in parallel")
+        verified = await asyncio.gather(*[verify_tool(candidate, current_tools) for candidate in candidates])
+        verified = [v for v in verified if v]  # Remove None results
+        verified_total = len(verified)
+        summary.add_metric("verified", verified_total)
 
-    logger.info("Verification results:")
-    logger.indent()
-    for action, results in by_status.items():
-        logger.info(f"{action.upper()}: {len(results)} tools")
-        for result in results:
-            logger.info(f"  • {result.name}: {result.reasoning}")
-    logger.dedent()
+        # Log verification results by status
+        by_status = defaultdict(list)
+        for result in verified:
+            by_status[result.action].append(result)
 
-    # Save verified tools
-    if verified:
-        if dry_run:
-            logger.info("[DRY RUN] Would have made the following changes:")
-            logger.indent()
-            for tool in verified:
-                if tool.action in ["add", "update"]:
-                    logger.info(f"{tool.action.upper()}: {tool.name} - {tool.reasoning}")
-            logger.dedent()
-        else:
-            # Handle updates first
-            for tool in [t for t in verified if t.action == "update" and t.existing_index is not None]:
-                current_tools["tools"][tool.existing_index] = {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "url": tool.url,
-                    "category": tool.category,
-                }
-                logger.info(f"Updated tool: {tool.name}")
+        logger.info("Verification results:")
+        logger.indent()
+        for action, results in by_status.items():
+            logger.info(f"{action.upper()}: {len(results)} tools")
+            for result in results:
+                logger.info(f"  • {result.name}: {result.reasoning}")
+        logger.dedent()
 
-            # Handle additions
-            new_tools = [
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "url": tool.url,
-                    "category": tool.category,
-                }
-                for tool in verified
-                if tool.action == "add"
-            ]
-            if new_tools:
-                current_tools["tools"].extend(new_tools)
-                logger.info(f"Added {len(new_tools)} new tools")
+        for action in ["add", "update", "skip", "error"]:
+            summary.add_metric(f"action_{action}", len(by_status.get(action, [])))
 
-            save_tools(current_tools)
+        # Save verified tools
+        if verified:
+            if dry_run:
+                logger.info("[DRY RUN] Would have made the following changes:")
+                logger.indent()
+                for tool in verified:
+                    if tool.action in ["add", "update"]:
+                        logger.info(f"{tool.action.upper()}: {tool.name} - {tool.reasoning}")
+                logger.dedent()
+            else:
+                # Handle updates first
+                for tool in [t for t in verified if t.action == "update" and t.existing_index is not None]:
+                    current_tools["tools"][tool.existing_index] = {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "url": tool.url,
+                        "category": tool.category,
+                    }
+                    logger.info(f"Updated tool: {tool.name}")
 
-    logger.dedent()
-    logger.info("Tool discovery complete")
-    return verified
+                # Handle additions
+                new_tools = [
+                    {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "url": tool.url,
+                        "category": tool.category,
+                    }
+                    for tool in verified
+                    if tool.action == "add"
+                ]
+                if new_tools:
+                    current_tools["tools"].extend(new_tools)
+                    logger.info(f"Added {len(new_tools)} new tools")
+
+                save_tools(current_tools)
+
+        logger.dedent()
+        logger.info("Tool discovery complete")
+        return verified
 
 
 async def check_duplicate_status(

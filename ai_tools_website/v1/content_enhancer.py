@@ -17,6 +17,7 @@ from openai import OpenAI
 from .data_manager import load_tools
 from .data_manager import save_tools
 from .logging_config import setup_logging
+from .logging_utils import pipeline_summary
 from .models import CONTENT_ENHANCER_MODEL
 
 load_dotenv()
@@ -183,44 +184,63 @@ def _normalize_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def enhance_tools(*, max_per_run: int, stale_days: int, dry_run: bool, force: bool) -> None:
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    with pipeline_summary("enhancement") as summary:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    tools_doc = load_tools()
-    tools = tools_doc.get("tools", [])
-    stale_after = timedelta(days=stale_days)
+        tools_doc = load_tools()
+        tools = tools_doc.get("tools", [])
+        stale_after = timedelta(days=stale_days)
 
-    updated_count = 0
-    attempted = 0
+        summary.add_attribute("dry_run", dry_run)
+        summary.add_attribute("force", force)
+        summary.add_metric("max_per_run", max_per_run)
+        summary.add_metric("stale_days", stale_days)
+        summary.add_metric("total_tools", len(tools))
 
-    for tool in tools:
-        if updated_count >= max_per_run:
-            break
+        updated_count = 0
+        attempted = 0
+        eligible = 0
+        generation_failures = 0
+        empty_payloads = 0
 
-        if not _needs_refresh(tool, stale_after=stale_after, force=force):
-            continue
+        for tool in tools:
+            if updated_count >= max_per_run:
+                break
 
-        attempted += 1
-        logger.info("Enhancing tool %s (%d/%d)", tool.get("name"), attempted, max_per_run)
-        enhanced = _generate_enhanced_content(client, tool)
-        if not enhanced:
-            continue
+            if not _needs_refresh(tool, stale_after=stale_after, force=force):
+                continue
 
-        normalized = _normalize_payload(enhanced)
-        if not normalized:
-            logger.info("No meaningful content returned for %s", tool.get("name"))
-            continue
+            eligible += 1
+            attempted += 1
+            logger.info("Enhancing tool %s (%d/%d)", tool.get("name"), attempted, max_per_run)
+            enhanced = _generate_enhanced_content(client, tool)
+            if not enhanced:
+                generation_failures += 1
+                continue
 
-        tool["enhanced_content"] = normalized
-        tool["enhanced_at"] = datetime.now(timezone.utc).isoformat()
-        updated_count += 1
+            normalized = _normalize_payload(enhanced)
+            if not normalized:
+                empty_payloads += 1
+                logger.info("No meaningful content returned for %s", tool.get("name"))
+                continue
 
-    if updated_count and not dry_run:
-        save_tools(tools_doc)
-        logger.info("Saved enhanced content for %d tools", updated_count)
-    elif updated_count:
-        logger.info("Dry run: %d tools would have been updated", updated_count)
-    else:
-        logger.info("No tools needed enhancement")
+            tool["enhanced_content"] = normalized
+            tool["enhanced_at"] = datetime.now(timezone.utc).isoformat()
+            updated_count += 1
+
+        if updated_count and not dry_run:
+            save_tools(tools_doc)
+            logger.info("Saved enhanced content for %d tools", updated_count)
+        elif updated_count:
+            logger.info("Dry run: %d tools would have been updated", updated_count)
+        else:
+            logger.info("No tools needed enhancement")
+
+        summary.add_metric("eligible_tools", eligible)
+        summary.add_metric("attempted", attempted)
+        summary.add_metric("updated", updated_count)
+        summary.add_metric("generation_failures", generation_failures)
+        summary.add_metric("empty_payloads", empty_payloads)
 
 
 @click.command()
