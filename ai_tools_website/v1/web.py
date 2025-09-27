@@ -25,6 +25,7 @@ from fasthtml.common import P
 from fasthtml.common import Script
 from fasthtml.common import Section
 from fasthtml.common import Span
+from fasthtml.common import Style
 from fasthtml.common import StyleX
 from fasthtml.common import Title
 from fasthtml.common import Ul
@@ -222,7 +223,7 @@ def category_section(name, tools, use_internal_links=False):
 app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
 
 
-status_styles = StyleX(
+status_styles = Style(
     """
     .pipeline-page { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; font-family: Inter, system-ui, sans-serif; }
     .pipeline-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap;
