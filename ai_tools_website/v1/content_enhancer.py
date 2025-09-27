@@ -24,8 +24,9 @@ load_dotenv()
 setup_logging()
 
 logger = logging.getLogger(__name__)
-DEFAULT_MAX_PER_RUN = int(os.getenv("CONTENT_ENHANCER_MAX_PER_RUN", "50"))
-DEFAULT_STALE_DAYS = int(os.getenv("CONTENT_ENHANCER_STALE_DAYS", "7"))
+# Optimized for Tier 5 OpenAI account - aggressive but smart processing
+DEFAULT_MAX_PER_RUN = int(os.getenv("CONTENT_ENHANCER_MAX_PER_RUN", "200"))
+DEFAULT_STALE_DAYS = int(os.getenv("CONTENT_ENHANCER_STALE_DAYS", "3"))
 
 
 def _strip_json_content(value: str) -> str:
