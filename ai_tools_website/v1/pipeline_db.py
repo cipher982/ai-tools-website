@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 def pipeline_db():
     """Download SQLite from MinIO, yield connection, upload back with proper binary handling."""
 
+    # Ensure bucket exists (minio_client wrapper handles this but we're using raw client)
+    try:
+        if not minio_client.client.bucket_exists(BUCKET_NAME):
+            minio_client.client.make_bucket(BUCKET_NAME)
+            logger.info(f"Created bucket: {BUCKET_NAME}")
+    except Exception as e:
+        logger.warning(f"Bucket check failed (might already exist): {e}")
+
     # Create temporary file for SQLite operations
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
         tmp_path = Path(tmp_file.name)
