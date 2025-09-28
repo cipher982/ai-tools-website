@@ -45,7 +45,7 @@ def pipeline_db():
         try:
             # Try to download existing DB
             try:
-                response = minio_client.get_object(BUCKET_NAME, DB_FILE_KEY)
+                response = minio_client.client.get_object(BUCKET_NAME, DB_FILE_KEY)
                 tmp_file.write(response.read())
                 tmp_file.flush()
                 logger.debug("Downloaded existing pipeline database from MinIO")
@@ -70,7 +70,7 @@ def pipeline_db():
             # Upload updated database back to MinIO
             with open(tmp_path, "rb") as db_file:
                 db_data = db_file.read()
-                minio_client.put_object(
+                minio_client.client.put_object(
                     BUCKET_NAME, DB_FILE_KEY, BytesIO(db_data), len(db_data), content_type="application/octet-stream"
                 )
             logger.debug("Uploaded updated pipeline database to MinIO")
