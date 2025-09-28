@@ -6,6 +6,7 @@ from datetime import datetime
 from datetime import timezone
 from pathlib import Path
 from typing import Dict
+from typing import List
 
 from dotenv import load_dotenv
 from fasthtml.common import H1
@@ -35,6 +36,12 @@ from ai_tools_website.v1.cron_utils import calculate_next_run
 from ai_tools_website.v1.cron_utils import get_cron_schedules
 from ai_tools_website.v1.data_manager import load_tools
 from ai_tools_website.v1.logging_config import setup_logging
+from ai_tools_website.v1.pipeline_analytics import calculate_health_score
+from ai_tools_website.v1.pipeline_analytics import filter_outcome_metrics
+from ai_tools_website.v1.pipeline_analytics import generate_insights
+from ai_tools_website.v1.pipeline_analytics import get_contextual_summary
+from ai_tools_website.v1.pipeline_analytics import render_progress_bar
+from ai_tools_website.v1.pipeline_analytics import render_sparkline
 from ai_tools_website.v1.pipeline_db import get_latest_pipeline_status
 from ai_tools_website.v1.seo_utils import generate_breadcrumb_list
 from ai_tools_website.v1.seo_utils import generate_category_slug
@@ -155,59 +162,71 @@ def render_tool_sections(tool: dict) -> list:
     return blocks
 
 
-def _load_pipeline_status_snapshot() -> dict:
-    """Load pipeline status from SQLite database."""
+def _build_enhanced_pipeline_data() -> List[Dict]:
+    """Build enhanced pipeline data with analytics and visual elements."""
     from datetime import datetime
     from datetime import timedelta
     from datetime import timezone
 
     # Get latest pipeline runs from database
     latest_runs = get_latest_pipeline_status()
+    db_pipelines = {run["pipeline"]: run for run in latest_runs}
 
     # Get cron schedules for next run calculations
     cron_schedules = get_cron_schedules()
-
-    # Build status snapshot with next run information
     now = datetime.now(timezone.utc)
-    pipelines = []
 
-    # Convert database results to status format
-    db_pipelines = {run["pipeline"]: run for run in latest_runs}
+    enhanced_pipelines = []
 
-    # Process each expected pipeline
     for pipeline in ["discovery", "maintenance", "enhancement"]:
         run = db_pipelines.get(pipeline)
 
+        # Calculate health metrics and insights
+        health = calculate_health_score(pipeline, days=7)
+        insights = generate_insights(pipeline, health)
+        contextual_summary = get_contextual_summary(pipeline, days=1)
+
+        # Handle maintenance special case
         if pipeline == "maintenance":
-            # Maintenance follows discovery
             discovery_run = db_pipelines.get("discovery")
             if discovery_run and discovery_run.get("status") == "success":
-                pipelines.append(
+                # Show as successful with discovery timing
+                enhanced_pipelines.append(
                     {
                         "pipeline": "maintenance",
-                        "status": "success",  # Assume maintenance ran with discovery
+                        "status": "success",
                         "started_at": discovery_run.get("started_at"),
                         "finished_at": discovery_run.get("finished_at"),
                         "duration_seconds": discovery_run.get("duration_seconds"),
-                        "schedule": "auto_after_discovery",
-                        "next_run": "after_discovery_completes",
-                        "next_run_in": "follows discovery",
-                        "metrics": {"note": "Runs automatically after discovery pipeline"},
-                        "attributes": {"triggered_by": "discovery"},
+                        "schedule_display": "Auto after discovery",
+                        "next_run_display": "Follows discovery",
+                        "health_score": health["score"],
+                        "health_status": health["status"],
+                        "contextual_summary": contextual_summary,
+                        "insights": insights,
+                        "sparkline": render_sparkline(health.get("durations", [])),
+                        "progress_bar": render_progress_bar(health["score"]),
+                        "filtered_metrics": {"Triggered automatically": "After discovery completes"},
                     }
                 )
             else:
-                pipelines.append(
+                enhanced_pipelines.append(
                     {
                         "pipeline": "maintenance",
                         "status": "pending",
-                        "schedule": "auto_after_discovery",
-                        "next_run": "after_next_discovery",
-                        "next_run_in": "follows discovery",
+                        "schedule_display": "Auto after discovery",
+                        "next_run_display": "Follows discovery",
+                        "health_score": health["score"],
+                        "health_status": health["status"],
+                        "contextual_summary": contextual_summary,
+                        "insights": insights or ["Waiting for discovery"],
+                        "filtered_metrics": {},
                     }
                 )
-        elif run:
-            # Pipeline has run before
+            continue
+
+        if run:
+            # Pipeline has execution history
             # Check if stale (older than 6 hours)
             finished_at = run.get("finished_at")
             stale = False
@@ -219,11 +238,14 @@ def _load_pipeline_status_snapshot() -> dict:
                 except ValueError:
                     pass
 
-            # Add next run info
+            # Calculate next run info
             cron_expr = cron_schedules.get(pipeline)
             next_run_info = calculate_next_run(cron_expr) if cron_expr else {}
 
-            pipelines.append(
+            # Filter metrics to remove config pollution
+            filtered_metrics = filter_outcome_metrics(pipeline, run.get("metrics", {}))
+
+            enhanced_pipelines.append(
                 {
                     "pipeline": run["pipeline"],
                     "status": run["status"],
@@ -231,12 +253,17 @@ def _load_pipeline_status_snapshot() -> dict:
                     "finished_at": run.get("finished_at"),
                     "duration_seconds": run.get("duration_seconds"),
                     "stale": stale,
-                    "metrics": run.get("metrics", {}),
-                    "attributes": run.get("attributes", {}),
+                    "schedule_display": cron_expr or "Unknown",
+                    "next_run_display": next_run_info.get("next_run_in", "—"),
+                    "health_score": health["score"],
+                    "health_status": health["status"],
+                    "contextual_summary": contextual_summary,
+                    "insights": insights,
+                    "sparkline": render_sparkline(health.get("durations", [])),
+                    "progress_bar": render_progress_bar(health["score"]),
+                    "filtered_metrics": filtered_metrics,
                     "error_type": run.get("error_type"),
                     "error_note": run.get("error_note"),
-                    "schedule": cron_expr or "unknown",
-                    **next_run_info,
                 }
             )
         else:
@@ -244,11 +271,21 @@ def _load_pipeline_status_snapshot() -> dict:
             cron_expr = cron_schedules.get(pipeline)
             next_run_info = calculate_next_run(cron_expr) if cron_expr else {}
 
-            pipelines.append(
-                {"pipeline": pipeline, "status": "missing", "schedule": cron_expr or "unknown", **next_run_info}
+            enhanced_pipelines.append(
+                {
+                    "pipeline": pipeline,
+                    "status": "missing",
+                    "schedule_display": cron_expr or "Unknown",
+                    "next_run_display": next_run_info.get("next_run_in", "—"),
+                    "health_score": 0,
+                    "health_status": "unknown",
+                    "contextual_summary": "Never executed",
+                    "insights": ["No execution history"],
+                    "filtered_metrics": {},
+                }
             )
 
-    return {"generated_at": now.isoformat(), "pipelines": pipelines}
+    return enhanced_pipelines
 
 
 def _format_timestamp(value: str | None) -> str:
@@ -309,28 +346,46 @@ app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
 
 status_styles = Style(
     """
-    .pipeline-page { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; font-family: Inter, system-ui, sans-serif; }
-    .pipeline-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap;
-                       gap: 0.5rem; }
+    .pipeline-page { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; font-family: Inter, system-ui, sans-serif; }
     .pipeline-grid { display: grid; gap: 1.5rem; margin-top: 1.5rem;
-                     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-    .pipeline-card { border: 1px solid #d0d7de; border-radius: 12px; padding: 1.25rem; background: #fff;
-                     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; gap: 0.5rem; }
-    .pipeline-card.status-success { border-color: #22c55e; }
-    .pipeline-card.status-error { border-color: #ef4444; }
-    .pipeline-card.status-missing, .pipeline-card.status-unknown { border-color: #9ca3af; }
-    .pipeline-card.status-stale { box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.25); }
-    .status-pill { display: inline-flex; align-items: center; padding: 0.15rem 0.6rem; border-radius: 999px;
-                   font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
-    .pipeline-card.status-success .status-pill { color: #166534; background: rgba(34, 197, 94, 0.16); }
-    .pipeline-card.status-error .status-pill { color: #991b1b; background: rgba(239, 68, 68, 0.18); }
-    .pipeline-card.status-missing .status-pill,
-    .pipeline-card.status-unknown .status-pill { color: #374151; background: rgba(156, 163, 175, 0.24); }
-    .status-note { font-size: 0.75rem; color: #b45309; font-weight: 600; }
-    .meta-row { font-size: 0.85rem; color: #475569; }
-    .metrics-list, .attributes-list { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; color: #1f2937; }
-    .section-title { margin-top: 0.5rem; font-size: 0.9rem; font-weight: 600; color: #111827; }
-    .empty-state { font-size: 0.9rem; color: #6b7280; font-style: italic; }
+                     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+    /* Enhanced pipeline cards */
+    .pipeline-card { border: 2px solid #e5e7eb; border-radius: 16px; padding: 1.5rem; background: #fff;
+                     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                     transition: all 0.2s; position: relative; overflow: hidden; }
+
+    /* Health-based styling */
+    .pipeline-card.health-excellent { border-color: #10b981; }
+    .pipeline-card.health-healthy { border-color: #22c55e; }
+    .pipeline-card.health-degraded { border-color: #f59e0b; }
+    .pipeline-card.health-critical { border-color: #ef4444; }
+    .pipeline-card.health-unknown { border-color: #9ca3af; }
+
+    /* Modern header */
+    .modern-header { margin-bottom: 1rem; }
+    .modern-header h2 { margin: 0; font-size: 1.25rem; font-weight: 700; color: #111827; }
+    .health-row { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .health-indicator { font-size: 0.9rem; font-weight: 600; }
+    .progress-visual { font-family: monospace; font-size: 0.8rem; letter-spacing: 0.05em; }
+
+    /* Summary section */
+    .summary-section { margin-bottom: 1rem; padding: 0.75rem; background: #f8fafc; border-radius: 8px; }
+    .schedule-info { margin: 0; font-size: 0.85rem; color: #4b5563; font-weight: 500; }
+    .next-run-info { margin: 0.25rem 0 0 0; font-size: 0.85rem; color: #6b7280; }
+    .trend-info { margin: 0.5rem 0 0 0; font-family: monospace; font-size: 0.8rem; color: #374151; }
+    .context-summary { margin: 0.5rem 0 0 0; font-size: 0.8rem; color: #059669; font-weight: 500; }
+
+    /* Insights and alerts */
+    .insight-alert { margin: 0.75rem 0; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.85rem;
+                     background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; color: #7f1d1d; }
+
+    /* Metrics */
+    .metrics-list { margin: 0.5rem 0 0 0; padding-left: 1rem; }
+    .metrics-list li { font-size: 0.85rem; margin: 0.25rem 0; color: #374151; }
+    .section-title { margin: 0.75rem 0 0.25rem 0; font-size: 0.9rem; font-weight: 600; color: #111827; }
+
+    /* General */
     body { background: #f8fafc; }
     a.back-link { color: #2563eb; font-size: 0.9rem; }
     .generated-at { font-size: 0.85rem; color: #475569; }
@@ -340,71 +395,95 @@ status_styles = Style(
 
 @rt("/pipeline-status")
 async def pipeline_status():
-    snapshot = _load_pipeline_status_snapshot()
-    pipelines = snapshot.get("pipelines", [])
-    generated_at = _format_timestamp(snapshot.get("generated_at"))
+    """Modern pipeline dashboard with operational intelligence."""
+
+    # Get enhanced pipeline data with analytics
+    enhanced_pipelines = _build_enhanced_pipeline_data()
+    now = datetime.now(timezone.utc)
 
     cards = []
-    if not pipelines:
-        cards.append(Div(P("No pipeline runs recorded yet."), _class="pipeline-card status-missing"))
+    if not enhanced_pipelines:
+        cards.append(Div(P("No pipeline data available."), _class="pipeline-card status-missing"))
     else:
-        for entry in pipelines:
-            pipeline_key = entry.get("pipeline", "unknown")
-            pipeline_label = pipeline_key.replace("_", " ").title()
-            status_value = entry.get("status", "unknown")
-            status_label = status_value.replace("_", " ").title()
-            card_classes = ["pipeline-card", f"status-{status_value}"]
-            if entry.get("stale"):
+        for pipeline in enhanced_pipelines:
+            pipeline_name = pipeline["pipeline"].replace("_", " ").title()
+            status = pipeline["status"]
+            health_status = pipeline.get("health_status", "unknown")
+
+            # Health status emoji
+            health_emoji = {"excellent": "✅", "healthy": "✅", "degraded": "⚠️", "critical": "❌", "unknown": "❓"}.get(
+                health_status, "❓"
+            )
+
+            # Build card classes
+            card_classes = ["pipeline-card", f"status-{status}", f"health-{health_status}"]
+            if pipeline.get("stale"):
                 card_classes.append("status-stale")
 
-            components = [
+            # Modern card header with health indicator
+            header_components = [
+                H2(f"{pipeline_name} Pipeline"),
                 Div(
-                    H2(pipeline_label),
-                    Span(status_label, _class="status-pill"),
-                    _class="pipeline-header",
+                    Span(f"{health_emoji} {health_status.title()}", _class="health-indicator"),
+                    Span(pipeline.get("progress_bar", ""), _class="progress-visual"),
+                    _class="health-row",
                 ),
-                P(f"Started: {_format_timestamp(entry.get('started_at'))}", _class="meta-row"),
-                P(f"Finished: {_format_timestamp(entry.get('finished_at'))}", _class="meta-row"),
-                P(f"Duration: {entry.get('duration_seconds', '—')}s", _class="meta-row"),
-                P(f"Schedule: {entry.get('schedule', 'Unknown')}", _class="meta-row"),
-                P(f"Next Run: {entry.get('next_run_in', '—')}", _class="meta-row"),
             ]
 
-            if entry.get("stale"):
-                components.append(Span("Stale data – older than 6 hours", _class="status-note"))
+            # Performance summary with sparkline
+            sparkline = pipeline.get("sparkline", "")
+            summary_components = [
+                P(f"{pipeline.get('schedule_display', 'Unknown schedule')}", _class="schedule-info"),
+                P(f"Next: {pipeline.get('next_run_display', '—')}", _class="next-run-info"),
+            ]
 
-            error_type = entry.get("error_type") or entry.get("error_note")
-            if error_type:
-                components.append(P(f"Last error: {error_type}", _class="status-note"))
+            if sparkline and sparkline != "─" * 12:
+                summary_components.append(P(f"Trend: {sparkline} (last 10 runs)", _class="trend-info"))
 
-            metrics = entry.get("metrics") or {}
-            components.append(H3("Metrics", _class="section-title"))
-            if metrics:
+            # Contextual summary
+            context_summary = pipeline.get("contextual_summary", "")
+            if context_summary and context_summary != "Never executed":
+                summary_components.append(P(context_summary, _class="context-summary"))
+
+            # Insights (actionable information)
+            insights = pipeline.get("insights", [])
+            insight_components = []
+            for insight in insights[:2]:  # Limit to 2 most important
+                if insight and not insight.startswith("Operating normally"):
+                    insight_components.append(P(insight, _class="insight-alert"))
+
+            # Filtered metrics (outcomes only)
+            metrics = pipeline.get("filtered_metrics", {})
+            metric_components = []
+            if metrics and len(metrics) > 0:
                 metric_items = [
-                    Li(f"{key.replace('_', ' ').title()}: {value}") for key, value in sorted(metrics.items())
+                    Li(f"{key}: {value}")
+                    for key, value in sorted(metrics.items())
+                    if str(value).isdigit() or isinstance(value, (int, float))  # Only show numeric outcomes
                 ]
-                components.append(Ul(*metric_items, _class="metrics-list"))
-            else:
-                components.append(P("No metrics reported", _class="empty-state"))
+                if metric_items:
+                    metric_components = [
+                        H3("Key Metrics", _class="section-title"),
+                        Ul(*metric_items, _class="metrics-list"),
+                    ]
 
-            attributes = entry.get("attributes") or {}
-            if attributes:
-                components.append(H3("Attributes", _class="section-title"))
-                attribute_items = [
-                    Li(f"{key.replace('_', ' ').title()}: {value}") for key, value in sorted(attributes.items())
-                ]
-                components.append(Ul(*attribute_items, _class="attributes-list"))
+            # Combine all components
+            card_content = [
+                Div(*header_components, _class="modern-header"),
+                Div(*summary_components, _class="summary-section"),
+                *insight_components,
+                *metric_components,
+            ]
 
-            cards.append(Div(*components, _class=" ".join(card_classes)))
+            cards.append(Div(*card_content, _class=" ".join(card_classes)))
 
+    # Modern dashboard layout
     content = Div(
         Div(
             A("← Back", href="/", _class="back-link"),
-            H1("Pipeline Status"),
-            P(
-                "Snapshot of our automated jobs. Data refreshes whenever the pipelines emit new summaries.",
-            ),
-            P(f"Updated: {generated_at}", _class="generated-at"),
+            H1("AI Tools Pipeline Dashboard"),
+            P("Real-time operational status with performance analytics and insights."),
+            P(f"Updated: {_format_timestamp(now.isoformat())}", _class="generated-at"),
             Div(*cards, _class="pipeline-grid"),
             _class="pipeline-page",
         ),
