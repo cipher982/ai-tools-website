@@ -31,9 +31,11 @@ from fasthtml.common import Title
 from fasthtml.common import Ul
 from fasthtml.fastapp import fast_app
 
+from ai_tools_website.v1.cron_utils import calculate_next_run
+from ai_tools_website.v1.cron_utils import get_cron_schedules
 from ai_tools_website.v1.data_manager import load_tools
 from ai_tools_website.v1.logging_config import setup_logging
-from ai_tools_website.v1.pipeline_status import load_pipeline_status
+from ai_tools_website.v1.pipeline_db import get_latest_pipeline_status
 from ai_tools_website.v1.seo_utils import generate_breadcrumb_list
 from ai_tools_website.v1.seo_utils import generate_category_slug
 from ai_tools_website.v1.seo_utils import generate_meta_description
@@ -154,8 +156,99 @@ def render_tool_sections(tool: dict) -> list:
 
 
 def _load_pipeline_status_snapshot() -> dict:
-    """Load pipeline status from MinIO."""
-    return load_pipeline_status()
+    """Load pipeline status from SQLite database."""
+    from datetime import datetime
+    from datetime import timedelta
+    from datetime import timezone
+
+    # Get latest pipeline runs from database
+    latest_runs = get_latest_pipeline_status()
+
+    # Get cron schedules for next run calculations
+    cron_schedules = get_cron_schedules()
+
+    # Build status snapshot with next run information
+    now = datetime.now(timezone.utc)
+    pipelines = []
+
+    # Convert database results to status format
+    db_pipelines = {run["pipeline"]: run for run in latest_runs}
+
+    # Process each expected pipeline
+    for pipeline in ["discovery", "maintenance", "enhancement"]:
+        run = db_pipelines.get(pipeline)
+
+        if pipeline == "maintenance":
+            # Maintenance follows discovery
+            discovery_run = db_pipelines.get("discovery")
+            if discovery_run and discovery_run.get("status") == "success":
+                pipelines.append(
+                    {
+                        "pipeline": "maintenance",
+                        "status": "success",  # Assume maintenance ran with discovery
+                        "started_at": discovery_run.get("started_at"),
+                        "finished_at": discovery_run.get("finished_at"),
+                        "duration_seconds": discovery_run.get("duration_seconds"),
+                        "schedule": "auto_after_discovery",
+                        "next_run": "after_discovery_completes",
+                        "next_run_in": "follows discovery",
+                        "metrics": {"note": "Runs automatically after discovery pipeline"},
+                        "attributes": {"triggered_by": "discovery"},
+                    }
+                )
+            else:
+                pipelines.append(
+                    {
+                        "pipeline": "maintenance",
+                        "status": "pending",
+                        "schedule": "auto_after_discovery",
+                        "next_run": "after_next_discovery",
+                        "next_run_in": "follows discovery",
+                    }
+                )
+        elif run:
+            # Pipeline has run before
+            # Check if stale (older than 6 hours)
+            finished_at = run.get("finished_at")
+            stale = False
+            if finished_at:
+                try:
+                    finished_dt = datetime.fromisoformat(finished_at)
+                    if now - finished_dt > timedelta(hours=6):
+                        stale = True
+                except ValueError:
+                    pass
+
+            # Add next run info
+            cron_expr = cron_schedules.get(pipeline)
+            next_run_info = calculate_next_run(cron_expr) if cron_expr else {}
+
+            pipelines.append(
+                {
+                    "pipeline": run["pipeline"],
+                    "status": run["status"],
+                    "started_at": run.get("started_at"),
+                    "finished_at": run.get("finished_at"),
+                    "duration_seconds": run.get("duration_seconds"),
+                    "stale": stale,
+                    "metrics": run.get("metrics", {}),
+                    "attributes": run.get("attributes", {}),
+                    "error_type": run.get("error_type"),
+                    "error_note": run.get("error_note"),
+                    "schedule": cron_expr or "unknown",
+                    **next_run_info,
+                }
+            )
+        else:
+            # Pipeline has never run
+            cron_expr = cron_schedules.get(pipeline)
+            next_run_info = calculate_next_run(cron_expr) if cron_expr else {}
+
+            pipelines.append(
+                {"pipeline": pipeline, "status": "missing", "schedule": cron_expr or "unknown", **next_run_info}
+            )
+
+    return {"generated_at": now.isoformat(), "pipelines": pipelines}
 
 
 def _format_timestamp(value: str | None) -> str:

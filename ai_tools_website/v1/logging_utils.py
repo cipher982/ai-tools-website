@@ -10,27 +10,19 @@ from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
 from datetime import timezone
-from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import Optional
 
-from ai_tools_website.v1.pipeline_status import update_pipeline_status
+from ai_tools_website.v1.pipeline_db import record_pipeline_run
 
 SUMMARY_PREFIX = "PIPELINE_SUMMARY"
 
 
 def _update_pipeline_status() -> None:
-    """Update the pipeline status snapshot after a pipeline run completes."""
-    try:
-        # Use the new module directly instead of subprocess
-        log_file_path = Path("logs/ai_tools.log")
-        update_pipeline_status(log_file_path)
-        logging.getLogger(__name__).debug("Pipeline status snapshot updated successfully")
-
-    except Exception as exc:
-        # Don't let status update failures break the pipeline
-        logging.getLogger(__name__).warning(f"Failed to update pipeline status: {exc}")
+    """Record pipeline run in database after completion."""
+    # This will be called from finalize() method with the pipeline data
+    pass
 
 
 @dataclass
@@ -102,8 +94,13 @@ class _PipelineSummaryState:
         message = f"{SUMMARY_PREFIX} {json.dumps(payload, sort_keys=True)}"
         self.logger.info(message)
 
-        # Trigger pipeline status update after logging
-        _update_pipeline_status()
+        # Record pipeline run in database
+        try:
+            record_pipeline_run(self.pipeline, payload)
+            logging.getLogger(__name__).debug(f"Recorded pipeline run in database: {self.pipeline}")
+        except Exception as exc:
+            # Don't let database failures break the pipeline
+            logging.getLogger(__name__).warning(f"Failed to record pipeline run: {exc}")
 
 
 @contextmanager
