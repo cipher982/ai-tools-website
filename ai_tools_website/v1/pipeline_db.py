@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Dict
 from typing import List
 
-from ai_tools_website.v1.data_manager import minio_client
+from ai_tools_website.v1.data_manager import BUCKET_NAME
+from ai_tools_website.v1.data_manager import get_minio_client
 
 DB_FILE_KEY = "pipeline_history.db"
-BUCKET_NAME = "ai-tools"
 
 logger = logging.getLogger(__name__)
 
@@ -38,22 +38,16 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 def pipeline_db():
     """Download SQLite from MinIO, yield connection, upload back with proper binary handling."""
 
-    # Ensure bucket exists (minio_client wrapper handles this but we're using raw client)
-    try:
-        if not minio_client.client.bucket_exists(BUCKET_NAME):
-            minio_client.client.make_bucket(BUCKET_NAME)
-            logger.info(f"Created bucket: {BUCKET_NAME}")
-    except Exception as e:
-        logger.warning(f"Bucket check failed (might already exist): {e}")
-
     # Create temporary file for SQLite operations
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
         tmp_path = Path(tmp_file.name)
 
         try:
+            client = get_minio_client()
+
             # Try to download existing DB
             try:
-                response = minio_client.client.get_object(BUCKET_NAME, DB_FILE_KEY)
+                response = client.get_object(BUCKET_NAME, DB_FILE_KEY)
                 tmp_file.write(response.read())
                 tmp_file.flush()
                 logger.debug("Downloaded existing pipeline database from MinIO")
@@ -78,7 +72,7 @@ def pipeline_db():
             # Upload updated database back to MinIO
             with open(tmp_path, "rb") as db_file:
                 db_data = db_file.read()
-                minio_client.client.put_object(
+                client.put_object(
                     BUCKET_NAME, DB_FILE_KEY, BytesIO(db_data), len(db_data), content_type="application/octet-stream"
                 )
             logger.debug("Uploaded updated pipeline database to MinIO")
