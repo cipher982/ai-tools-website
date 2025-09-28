@@ -33,6 +33,7 @@ from fasthtml.fastapp import fast_app
 
 from ai_tools_website.v1.data_manager import load_tools
 from ai_tools_website.v1.logging_config import setup_logging
+from ai_tools_website.v1.pipeline_status import load_pipeline_status
 from ai_tools_website.v1.seo_utils import generate_breadcrumb_list
 from ai_tools_website.v1.seo_utils import generate_category_slug
 from ai_tools_website.v1.seo_utils import generate_meta_description
@@ -152,19 +153,9 @@ def render_tool_sections(tool: dict) -> list:
     return blocks
 
 
-PIPELINE_STATUS_PATH = Path(__file__).parent / "static" / "pipeline_status.json"
-
-
 def _load_pipeline_status_snapshot() -> dict | None:
-    if not PIPELINE_STATUS_PATH.exists():
-        logger.info("Pipeline status snapshot missing at %s", PIPELINE_STATUS_PATH)
-        return None
-    try:
-        with PIPELINE_STATUS_PATH.open() as handle:
-            return json.load(handle)
-    except json.JSONDecodeError as exc:
-        logger.warning("Failed to parse pipeline status snapshot: %s", exc)
-        return None
+    """Load pipeline status from MinIO with fallback to local file."""
+    return load_pipeline_status()
 
 
 def _format_timestamp(value: str | None) -> str:
@@ -282,6 +273,8 @@ async def pipeline_status():
                 P(f"Started: {_format_timestamp(entry.get('started_at'))}", _class="meta-row"),
                 P(f"Finished: {_format_timestamp(entry.get('finished_at'))}", _class="meta-row"),
                 P(f"Duration: {entry.get('duration_seconds', '—')}s", _class="meta-row"),
+                P(f"Schedule: {entry.get('schedule', 'Unknown')}", _class="meta-row"),
+                P(f"Next Run: {entry.get('next_run_in', '—')}", _class="meta-row"),
             ]
 
             if entry.get("stale"):

@@ -63,6 +63,29 @@ def _build_prompt_payload(tool: Dict[str, Any]) -> str:
     return json.dumps(summary, indent=2)
 
 
+def _extract_output_text(response: Any) -> str:
+    """Best-effort extraction of text from a Responses API payload."""
+    text = getattr(response, "output_text", "") or ""
+    if text:
+        return text
+
+    output_items = getattr(response, "output", None) or []
+    collected: list[str] = []
+    for item in output_items:
+        if getattr(item, "type", None) != "message":
+            continue
+        for content_item in getattr(item, "content", []) or []:
+            content_type = getattr(content_item, "type", None)
+            if content_type == "output_text":
+                piece = getattr(content_item, "text", "")
+                if piece:
+                    collected.append(piece)
+            elif content_type == "output_audio" and hasattr(content_item, "transcript"):
+                # Fallback for models that return transcripts rather than text.
+                collected.append(getattr(content_item, "transcript", ""))
+    return "".join(collected)
+
+
 def _generate_enhanced_content(client: OpenAI, tool: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Call the LLM to generate enriched copy for a single tool."""
     payload = _build_prompt_payload(tool)
@@ -96,22 +119,28 @@ def _generate_enhanced_content(client: OpenAI, tool: Dict[str, Any]) -> Optional
     )
 
     try:
-        response = client.chat.completions.create(
+        response = client.responses.create(
             model=CONTENT_ENHANCER_MODEL,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
+            instructions=system,
+            tools=[{"type": "web_search"}],
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user},
+                    ],
+                }
             ],
         )
     except Exception as exc:  # noqa: BLE001
         logger.error("OpenAI request failed for %s: %s", tool.get("name"), exc)
         return None
 
-    if not response.choices:
-        logger.warning("No choices returned for %s", tool.get("name"))
+    content = _extract_output_text(response)
+    if not content:
+        logger.warning("No content returned for %s", tool.get("name"))
         return None
 
-    content = response.choices[0].message.content or ""
     parsed = _parse_response(content)
     if parsed is None:
         logger.warning("Skipping %s due to unparsable response", tool.get("name"))

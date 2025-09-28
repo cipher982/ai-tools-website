@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -16,33 +15,18 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ai_tools_website.v1.pipeline_status import update_pipeline_status
+
 SUMMARY_PREFIX = "PIPELINE_SUMMARY"
 
 
 def _update_pipeline_status() -> None:
     """Update the pipeline status snapshot after a pipeline run completes."""
     try:
-        # Use Path to ensure we're working from the project root
-        project_root = Path(__file__).parent.parent.parent
-        script_path = project_root / "scripts" / "build_pipeline_status.py"
-
-        if not script_path.exists():
-            logging.getLogger(__name__).warning(f"Pipeline status script not found at {script_path}")
-            return
-
-        # Run the script to update the status snapshot
-        result = subprocess.run(
-            ["python3", str(script_path)],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode != 0:
-            logging.getLogger(__name__).error(f"Pipeline status update failed: {result.stderr}")
-        else:
-            logging.getLogger(__name__).debug("Pipeline status snapshot updated successfully")
+        # Use the new module directly instead of subprocess
+        log_file_path = Path("logs/ai_tools.log")
+        update_pipeline_status(log_file_path)
+        logging.getLogger(__name__).debug("Pipeline status snapshot updated successfully")
 
     except Exception as exc:
         # Don't let status update failures break the pipeline
