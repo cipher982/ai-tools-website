@@ -14,22 +14,14 @@ from typing import Optional
 
 from croniter import croniter
 
+from ai_tools_website.v1.data_manager import get_minio_client
+
 SUMMARY_PREFIX = "PIPELINE_SUMMARY"
 DEFAULT_PIPELINES = ["discovery", "maintenance", "enhancement"]
 STALE_THRESHOLD = timedelta(hours=6)
 PIPELINE_STATUS_KEY = "pipeline_status.json"
 
 logger = logging.getLogger(__name__)
-
-# Use the existing data manager's MinIO setup
-try:
-    from ai_tools_website.v1.data_manager import get_minio_client
-
-    MINIO_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"MinIO not available: {e}")
-    MINIO_AVAILABLE = False
-    get_minio_client = None
 
 
 def parse_summary(line: str) -> Optional[Dict]:
@@ -195,88 +187,44 @@ def update_pipeline_status(log_file_path: Path = Path("logs/ai_tools.log"), pipe
     if pipelines is None:
         pipelines = DEFAULT_PIPELINES
 
-    try:
-        # Read log file if it exists
-        if log_file_path.exists():
-            lines = log_file_path.read_text().splitlines()
-            latest = collect_latest(lines, pipelines)
-        else:
-            logger.warning(f"Log file not found: {log_file_path}")
-            latest = {}
+    # Read log file if it exists
+    if log_file_path.exists():
+        lines = log_file_path.read_text().splitlines()
+        latest = collect_latest(lines, pipelines)
+    else:
+        logger.warning(f"Log file not found: {log_file_path}")
+        latest = {}
 
-        # Build snapshot
-        snapshot = build_snapshot(latest, pipelines)
+    # Build snapshot
+    snapshot = build_snapshot(latest, pipelines)
 
-        if MINIO_AVAILABLE and get_minio_client:
-            try:
-                # Upload to MinIO
-                minio_client = get_minio_client()
-                bucket_name = "ai-tools"  # Same bucket as tools.json
+    # Upload to MinIO
+    minio_client = get_minio_client()
+    bucket_name = "ai-tools"  # Same bucket as tools.json
 
-                # Convert to JSON bytes
-                json_data = json.dumps(snapshot, indent=2).encode("utf-8")
+    # Convert to JSON bytes
+    json_data = json.dumps(snapshot, indent=2).encode("utf-8")
 
-                # Upload to MinIO
-                from io import BytesIO
+    # Upload to MinIO
+    from io import BytesIO
 
-                minio_client.put_object(
-                    bucket_name,
-                    PIPELINE_STATUS_KEY,
-                    BytesIO(json_data),
-                    len(json_data),
-                    content_type="application/json",
-                )
+    minio_client.put_object(
+        bucket_name,
+        PIPELINE_STATUS_KEY,
+        BytesIO(json_data),
+        len(json_data),
+        content_type="application/json",
+    )
 
-                logger.info(f"Pipeline status updated in MinIO: {PIPELINE_STATUS_KEY}")
-            except Exception as e:
-                logger.warning(f"Failed to upload to MinIO: {e}")
-                # Fall back to local file
-                _write_local_backup(snapshot)
-        else:
-            logger.info("MinIO not available, writing to local file")
-            _write_local_backup(snapshot)
-
-    except Exception as e:
-        logger.error(f"Failed to update pipeline status: {e}")
-        raise
+    logger.info(f"Pipeline status updated in MinIO: {PIPELINE_STATUS_KEY}")
 
 
-def _write_local_backup(snapshot: dict) -> None:
-    """Write pipeline status to local file as backup."""
-    try:
-        local_path = Path(__file__).parent / "static" / "pipeline_status.json"
-        local_path.parent.mkdir(parents=True, exist_ok=True)
-        with local_path.open("w") as f:
-            json.dump(snapshot, f, indent=2)
-        logger.info(f"Pipeline status written to local file: {local_path}")
-    except Exception as e:
-        logger.error(f"Failed to write local backup: {e}")
+def load_pipeline_status() -> Dict:
+    """Load pipeline status from MinIO."""
+    minio_client = get_minio_client()
+    bucket_name = "ai-tools"
 
-
-def load_pipeline_status() -> Optional[Dict]:
-    """Load pipeline status from MinIO with fallback to local file."""
-    if MINIO_AVAILABLE and get_minio_client:
-        try:
-            # Try MinIO first
-            minio_client = get_minio_client()
-            bucket_name = "ai-tools"
-
-            response = minio_client.get_object(bucket_name, PIPELINE_STATUS_KEY)
-            data = json.loads(response.read().decode("utf-8"))
-            logger.debug("Loaded pipeline status from MinIO")
-            return data
-
-        except Exception as e:
-            logger.warning(f"Failed to load from MinIO, falling back to local file: {e}")
-
-    # Fallback to local static file
-    try:
-        local_path = Path(__file__).parent / "static" / "pipeline_status.json"
-        if local_path.exists():
-            with local_path.open() as f:
-                return json.load(f)
-        logger.warning(f"Local pipeline status file not found: {local_path}")
-    except Exception as local_e:
-        logger.error(f"Failed to load local pipeline status: {local_e}")
-
-    return None
+    response = minio_client.get_object(bucket_name, PIPELINE_STATUS_KEY)
+    data = json.loads(response.read().decode("utf-8"))
+    logger.debug("Loaded pipeline status from MinIO")
+    return data

@@ -153,8 +153,8 @@ def render_tool_sections(tool: dict) -> list:
     return blocks
 
 
-def _load_pipeline_status_snapshot() -> dict | None:
-    """Load pipeline status from MinIO with fallback to local file."""
+def _load_pipeline_status_snapshot() -> dict:
+    """Load pipeline status from MinIO."""
     return load_pipeline_status()
 
 
@@ -248,8 +248,8 @@ status_styles = Style(
 @rt("/pipeline-status")
 async def pipeline_status():
     snapshot = _load_pipeline_status_snapshot()
-    pipelines = snapshot.get("pipelines", []) if snapshot else []
-    generated_at = _format_timestamp(snapshot.get("generated_at")) if snapshot else None
+    pipelines = snapshot.get("pipelines", [])
+    generated_at = _format_timestamp(snapshot.get("generated_at"))
 
     cards = []
     if not pipelines:
@@ -311,7 +311,7 @@ async def pipeline_status():
             P(
                 "Snapshot of our automated jobs. Data refreshes whenever the pipelines emit new summaries.",
             ),
-            P(f"Updated: {generated_at}" if generated_at else "Updated: —", _class="generated-at"),
+            P(f"Updated: {generated_at}", _class="generated-at"),
             Div(*cards, _class="pipeline-grid"),
             _class="pipeline-page",
         ),
