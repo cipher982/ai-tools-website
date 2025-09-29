@@ -346,138 +346,117 @@ app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
 
 status_styles = Style(
     """
-    /* Page layout */
-    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+    /* Retro Windows Pipeline Dashboard - Compact Above-The-Fold Design */
     .pipeline-page {
-        max-width: 1200px; margin: 0 auto; padding: 2rem 1rem;
-        font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif;
+        background: var(--win98-face);
+        padding: var(--spacing-md);
+        border: var(--border-raised);
+        border-color: var(--border-raised-color);
+        box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3);
+        margin: var(--spacing-lg) auto;
+        max-width: 1100px;
     }
 
-    /* Header styling */
-    .pipeline-page h1 {
-        color: white; font-size: 2.5rem; font-weight: 800; margin-bottom: 0.5rem;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    .pipeline-grid {
+        display: grid;
+        gap: var(--spacing-md);
+        grid-template-columns: repeat(3, 1fr);
+        margin-top: var(--spacing-md);
     }
-    .pipeline-page > div > p:first-of-type {
-        color: rgba(255,255,255,0.9); font-size: 1.1rem; margin-bottom: 0.25rem;
-    }
-    .generated-at { color: rgba(255,255,255,0.7); font-size: 0.9rem; margin-bottom: 2rem; }
-    .back-link {
-        color: rgba(255,255,255,0.9); font-size: 0.9rem; text-decoration: none;
-        margin-bottom: 1.5rem; display: inline-block;
-    }
-    .back-link:hover { color: white; }
 
-    /* Grid layout */
-    .pipeline-grid { display: grid; gap: 2rem; margin-top: 2rem;
-                     grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
-
-    /* Beautiful pipeline cards */
+    /* Compact pipeline windows */
     .pipeline-card {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 20px;
-        padding: 2rem;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: var(--win98-face);
+        border: var(--border-sunken);
+        border-color: var(--border-sunken-color);
+        padding: var(--spacing-md);
         position: relative;
-        overflow: hidden;
+        min-height: 200px;
     }
 
-    .pipeline-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.06);
+    /* Health status title bars */
+    .modern-header {
+        background: var(--win98-active-title);
+        color: var(--win98-text-light);
+        margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 11px;
+        font-weight: bold;
+        border-bottom: 1px solid var(--win98-shadow);
     }
 
-    /* Health-based card accents */
-    .pipeline-card.health-excellent::before {
-        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-        background: linear-gradient(90deg, #10b981, #22c55e);
-    }
-    .pipeline-card.health-healthy::before {
-        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-        background: linear-gradient(90deg, #22c55e, #16a34a);
-    }
-    .pipeline-card.health-degraded::before {
-        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-        background: linear-gradient(90deg, #f59e0b, #eab308);
-    }
-    .pipeline-card.health-critical::before {
-        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-        background: linear-gradient(90deg, #ef4444, #dc2626);
-    }
-    .pipeline-card.health-unknown::before {
-        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-        background: linear-gradient(90deg, #9ca3af, #6b7280);
-    }
+    .health-excellent .modern-header { background: #008000; }
+    .health-healthy .modern-header { background: #008000; }
+    .health-degraded .modern-header { background: #808000; }
+    .health-critical .modern-header { background: #800000; }
+    .health-unknown .modern-header { background: var(--win98-inactive-title); }
 
-    /* Modern header */
-    .modern-header { margin-bottom: 1.5rem; }
-    .modern-header h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #111827; line-height: 1.2; }
-    .health-row { display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; }
-    .health-indicator { font-size: 1rem; font-weight: 600; }
-    .progress-visual {
-        font-family: 'SF Mono', Consolas, monospace; font-size: 0.9rem;
-        letter-spacing: 0.1em; opacity: 0.8;
-    }
+    .modern-header h2 { margin: 0; font-size: 11px; font-weight: bold; display: inline; }
+    .health-row { float: right; }
+    .health-indicator { font-size: 11px; }
+    .progress-visual { font-family: monospace; font-size: 10px; margin-left: 4px; }
 
-    /* Enhanced summary section */
+    /* Compact info sections */
     .summary-section {
-        margin-bottom: 1.5rem;
-        padding: 1rem 1.25rem;
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
-        border-radius: 12px;
-        border: 1px solid rgba(99, 102, 241, 0.1);
-    }
-    .schedule-info { margin: 0; font-size: 0.9rem; color: #4338ca; font-weight: 600; }
-    .next-run-info { margin: 0.5rem 0 0 0; font-size: 0.85rem; color: #6366f1; }
-    .trend-info {
-        margin: 0.75rem 0 0 0; font-family: 'SF Mono', Consolas, monospace;
-        font-size: 0.85rem; color: #475569;
-    }
-    .context-summary {
-        margin: 0.75rem 0 0 0; font-size: 0.85rem; color: #059669; font-weight: 600;
+        background: var(--win98-button-face);
+        border: var(--border-sunken);
+        border-color: var(--border-sunken-color);
+        padding: var(--spacing-sm);
+        margin-bottom: var(--spacing-sm);
+        font-size: 10px;
     }
 
-    /* Beautiful insights */
+    .schedule-info { margin: 0; font-weight: bold; color: var(--win98-text); }
+    .next-run-info { margin: 2px 0 0 0; color: var(--win98-accent); }
+    .trend-info { margin: 2px 0 0 0; font-family: monospace; }
+    .context-summary { margin: 2px 0 0 0; font-weight: bold; }
+
+    /* Compact insights */
+    .insight-normal, .insight-warning, .insight-critical {
+        margin: var(--spacing-sm) 0;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 10px;
+        border: 1px solid;
+    }
+
     .insight-normal {
-        margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500;
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(16, 185, 129, 0.05));
-        border: 1px solid rgba(34, 197, 94, 0.2); color: #065f46;
+        background: #C8F7C5; border-color: #4ADE80; color: #166534;
     }
     .insight-warning {
-        margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500;
-        background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(245, 158, 11, 0.05));
-        border: 1px solid rgba(251, 191, 36, 0.2); color: #92400e;
+        background: #FEF3C7; border-color: #FBBF24; color: #92400E;
     }
     .insight-critical {
-        margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500;
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(220, 38, 38, 0.05));
-        border: 1px solid rgba(239, 68, 68, 0.2); color: #7f1d1d;
+        background: #FEE2E2; border-color: #F87171; color: #991B1B;
     }
 
-    /* Elegant metrics */
+    /* Compact metrics */
     .section-title {
-        margin: 1.25rem 0 0.75rem 0; font-size: 1rem; font-weight: 700; color: #374151;
-        text-transform: uppercase; letter-spacing: 0.05em;
+        margin: var(--spacing-sm) 0 var(--spacing-xs) 0;
+        font-size: 10px;
+        font-weight: bold;
+        color: var(--win98-text);
     }
-    .metrics-list { margin: 0; padding: 0; list-style: none; }
+    .metrics-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-size: 10px;
+    }
     .metrics-list li {
-        font-size: 0.9rem; margin: 0.5rem 0; color: #475569;
-        padding: 0.5rem 0; border-bottom: 1px solid rgba(156, 163, 175, 0.1);
-        display: flex; justify-content: space-between; align-items: center;
+        display: flex;
+        justify-content: space-between;
+        margin: 1px 0;
+        padding: 1px 0;
     }
-    .metrics-list li:last-child { border-bottom: none; }
-    .metrics-list li strong { font-weight: 600; color: #111827; }
-    .metric-value { font-weight: 700; color: #4338ca; font-size: 1rem; }
+    .metric-value { font-weight: bold; color: var(--win98-accent); }
 
-    /* Responsive design */
+    /* Typography consistency */
+    .back-link { color: var(--win98-text); text-decoration: underline; font-size: 11px; }
+    .generated-at { font-size: 10px; color: var(--win98-text); margin-top: var(--spacing-sm); }
+
+    /* Responsive - stack on mobile */
     @media (max-width: 768px) {
-        .pipeline-page { padding: 1rem 0.75rem; }
-        .pipeline-grid { grid-template-columns: 1fr; gap: 1.5rem; }
-        .pipeline-card { padding: 1.5rem; }
-        .pipeline-page h1 { font-size: 2rem; }
+        .pipeline-grid { grid-template-columns: 1fr; }
     }
     """
 )
@@ -582,14 +561,14 @@ async def pipeline_status():
 
             cards.append(Div(*card_content, _class=" ".join(card_classes)))
 
-    # Modern dashboard layout
+    # Retro Windows dashboard layout
     content = Div(
         Div(
             A("← Back", href="/", _class="back-link"),
-            H1("AI Tools Pipeline Dashboard"),
-            P("Real-time operational status with performance analytics and insights."),
-            P(f"Updated: {_format_timestamp(now.isoformat())}", _class="generated-at"),
+            H1("Pipeline Monitor", _class="window-title"),
+            P("Automated job status with performance metrics and diagnostics."),
             Div(*cards, _class="pipeline-grid"),
+            P(f"Last Updated: {_format_timestamp(now.isoformat())}", _class="generated-at"),
             _class="pipeline-page",
         ),
     )
