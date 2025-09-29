@@ -346,49 +346,139 @@ app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
 
 status_styles = Style(
     """
-    .pipeline-page { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; font-family: Inter, system-ui, sans-serif; }
-    .pipeline-grid { display: grid; gap: 1.5rem; margin-top: 1.5rem;
-                     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    /* Page layout */
+    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+    .pipeline-page {
+        max-width: 1200px; margin: 0 auto; padding: 2rem 1rem;
+        font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif;
+    }
 
-    /* Enhanced pipeline cards */
-    .pipeline-card { border: 2px solid #e5e7eb; border-radius: 16px; padding: 1.5rem; background: #fff;
-                     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-                     transition: all 0.2s; position: relative; overflow: hidden; }
+    /* Header styling */
+    .pipeline-page h1 {
+        color: white; font-size: 2.5rem; font-weight: 800; margin-bottom: 0.5rem;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .pipeline-page > div > p:first-of-type {
+        color: rgba(255,255,255,0.9); font-size: 1.1rem; margin-bottom: 0.25rem;
+    }
+    .generated-at { color: rgba(255,255,255,0.7); font-size: 0.9rem; margin-bottom: 2rem; }
+    .back-link {
+        color: rgba(255,255,255,0.9); font-size: 0.9rem; text-decoration: none;
+        margin-bottom: 1.5rem; display: inline-block;
+    }
+    .back-link:hover { color: white; }
 
-    /* Health-based styling */
-    .pipeline-card.health-excellent { border-color: #10b981; }
-    .pipeline-card.health-healthy { border-color: #22c55e; }
-    .pipeline-card.health-degraded { border-color: #f59e0b; }
-    .pipeline-card.health-critical { border-color: #ef4444; }
-    .pipeline-card.health-unknown { border-color: #9ca3af; }
+    /* Grid layout */
+    .pipeline-grid { display: grid; gap: 2rem; margin-top: 2rem;
+                     grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
+
+    /* Beautiful pipeline cards */
+    .pipeline-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 20px;
+        padding: 2rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .pipeline-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Health-based card accents */
+    .pipeline-card.health-excellent::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+        background: linear-gradient(90deg, #10b981, #22c55e);
+    }
+    .pipeline-card.health-healthy::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+        background: linear-gradient(90deg, #22c55e, #16a34a);
+    }
+    .pipeline-card.health-degraded::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+        background: linear-gradient(90deg, #f59e0b, #eab308);
+    }
+    .pipeline-card.health-critical::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+        background: linear-gradient(90deg, #ef4444, #dc2626);
+    }
+    .pipeline-card.health-unknown::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+        background: linear-gradient(90deg, #9ca3af, #6b7280);
+    }
 
     /* Modern header */
-    .modern-header { margin-bottom: 1rem; }
-    .modern-header h2 { margin: 0; font-size: 1.25rem; font-weight: 700; color: #111827; }
-    .health-row { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
-    .health-indicator { font-size: 0.9rem; font-weight: 600; }
-    .progress-visual { font-family: monospace; font-size: 0.8rem; letter-spacing: 0.05em; }
+    .modern-header { margin-bottom: 1.5rem; }
+    .modern-header h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #111827; line-height: 1.2; }
+    .health-row { display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; }
+    .health-indicator { font-size: 1rem; font-weight: 600; }
+    .progress-visual {
+        font-family: 'SF Mono', Consolas, monospace; font-size: 0.9rem;
+        letter-spacing: 0.1em; opacity: 0.8;
+    }
 
-    /* Summary section */
-    .summary-section { margin-bottom: 1rem; padding: 0.75rem; background: #f8fafc; border-radius: 8px; }
-    .schedule-info { margin: 0; font-size: 0.85rem; color: #4b5563; font-weight: 500; }
-    .next-run-info { margin: 0.25rem 0 0 0; font-size: 0.85rem; color: #6b7280; }
-    .trend-info { margin: 0.5rem 0 0 0; font-family: monospace; font-size: 0.8rem; color: #374151; }
-    .context-summary { margin: 0.5rem 0 0 0; font-size: 0.8rem; color: #059669; font-weight: 500; }
+    /* Enhanced summary section */
+    .summary-section {
+        margin-bottom: 1.5rem;
+        padding: 1rem 1.25rem;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+        border-radius: 12px;
+        border: 1px solid rgba(99, 102, 241, 0.1);
+    }
+    .schedule-info { margin: 0; font-size: 0.9rem; color: #4338ca; font-weight: 600; }
+    .next-run-info { margin: 0.5rem 0 0 0; font-size: 0.85rem; color: #6366f1; }
+    .trend-info {
+        margin: 0.75rem 0 0 0; font-family: 'SF Mono', Consolas, monospace;
+        font-size: 0.85rem; color: #475569;
+    }
+    .context-summary {
+        margin: 0.75rem 0 0 0; font-size: 0.85rem; color: #059669; font-weight: 600;
+    }
 
-    /* Insights and alerts */
-    .insight-alert { margin: 0.75rem 0; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.85rem;
-                     background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; color: #7f1d1d; }
+    /* Beautiful insights */
+    .insight-normal {
+        margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500;
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(16, 185, 129, 0.05));
+        border: 1px solid rgba(34, 197, 94, 0.2); color: #065f46;
+    }
+    .insight-warning {
+        margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500;
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(245, 158, 11, 0.05));
+        border: 1px solid rgba(251, 191, 36, 0.2); color: #92400e;
+    }
+    .insight-critical {
+        margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.9rem; font-weight: 500;
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(220, 38, 38, 0.05));
+        border: 1px solid rgba(239, 68, 68, 0.2); color: #7f1d1d;
+    }
 
-    /* Metrics */
-    .metrics-list { margin: 0.5rem 0 0 0; padding-left: 1rem; }
-    .metrics-list li { font-size: 0.85rem; margin: 0.25rem 0; color: #374151; }
-    .section-title { margin: 0.75rem 0 0.25rem 0; font-size: 0.9rem; font-weight: 600; color: #111827; }
+    /* Elegant metrics */
+    .section-title {
+        margin: 1.25rem 0 0.75rem 0; font-size: 1rem; font-weight: 700; color: #374151;
+        text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .metrics-list { margin: 0; padding: 0; list-style: none; }
+    .metrics-list li {
+        font-size: 0.9rem; margin: 0.5rem 0; color: #475569;
+        padding: 0.5rem 0; border-bottom: 1px solid rgba(156, 163, 175, 0.1);
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .metrics-list li:last-child { border-bottom: none; }
+    .metrics-list li strong { font-weight: 600; color: #111827; }
+    .metric-value { font-weight: 700; color: #4338ca; font-size: 1rem; }
 
-    /* General */
-    body { background: #f8fafc; }
-    a.back-link { color: #2563eb; font-size: 0.9rem; }
-    .generated-at { font-size: 0.85rem; color: #475569; }
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .pipeline-page { padding: 1rem 0.75rem; }
+        .pipeline-grid { grid-template-columns: 1fr; gap: 1.5rem; }
+        .pipeline-card { padding: 1.5rem; }
+        .pipeline-page h1 { font-size: 2rem; }
+    }
     """
 )
 
@@ -449,18 +539,33 @@ async def pipeline_status():
             insights = pipeline.get("insights", [])
             insight_components = []
             for insight in insights[:2]:  # Limit to 2 most important
-                if insight and not insight.startswith("Operating normally"):
-                    insight_components.append(P(insight, _class="insight-alert"))
+                if insight:
+                    # Classify insight type by content
+                    if insight.startswith(("✅", "⚡ Performance improving")):
+                        css_class = "insight-normal"
+                    elif insight.startswith(("⚠️", "⏱️")):
+                        css_class = "insight-warning"
+                    elif insight.startswith(("🚨", "🔥", "❌")):
+                        css_class = "insight-critical"
+                    else:
+                        css_class = "insight-normal"  # Default to normal
+
+                    insight_components.append(P(insight, _class=css_class))
 
             # Filtered metrics (outcomes only)
             metrics = pipeline.get("filtered_metrics", {})
             metric_components = []
             if metrics and len(metrics) > 0:
-                metric_items = [
-                    Li(f"{key}: {value}")
-                    for key, value in sorted(metrics.items())
-                    if str(value).isdigit() or isinstance(value, (int, float))  # Only show numeric outcomes
-                ]
+                metric_items = []
+                for key, value in sorted(metrics.items()):
+                    if str(value).isdigit() or isinstance(value, (int, float)):  # Only show numeric outcomes
+                        # Format the metric display
+                        metric_items.append(
+                            Li(
+                                Span(key),
+                                Span(str(value), _class="metric-value"),
+                            )
+                        )
                 if metric_items:
                     metric_components = [
                         H3("Key Metrics", _class="section-title"),
