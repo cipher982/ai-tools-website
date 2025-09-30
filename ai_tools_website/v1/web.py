@@ -346,117 +346,200 @@ app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
 
 status_styles = Style(
     """
-    /* Retro Windows Pipeline Dashboard - Compact Above-The-Fold Design */
-    .pipeline-page {
-        background: var(--win98-face);
-        padding: var(--spacing-md);
-        border: var(--border-raised);
-        border-color: var(--border-raised-color);
-        box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3);
-        margin: var(--spacing-lg) auto;
-        max-width: 1100px;
-    }
+    /* Pipeline Dashboard - Consistent with Main Page Styling */
 
+    /* Pipeline grid layout */
     .pipeline-grid {
         display: grid;
         gap: var(--spacing-md);
         grid-template-columns: repeat(3, 1fr);
-        margin-top: var(--spacing-md);
+        margin-top: var(--spacing-lg);
     }
 
-    /* Compact pipeline windows */
+    /* Pipeline cards as Windows 98 dialog boxes */
     .pipeline-card {
         background: var(--win98-face);
-        border: var(--border-sunken);
-        border-color: var(--border-sunken-color);
-        padding: var(--spacing-md);
+        border: var(--border-raised);
+        border-color: var(--border-raised-color);
+        padding: 0;
         position: relative;
         min-height: 200px;
+        box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
     }
 
-    /* Health status title bars */
-    .modern-header {
-        background: var(--win98-active-title);
+    /* Title bars with health status colors */
+    .pipeline-title-bar {
+        background: linear-gradient(90deg, var(--win98-active-title) 0%, var(--win98-accent) 100%);
         color: var(--win98-text-light);
-        margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-sm);
         padding: var(--spacing-sm) var(--spacing-md);
+        font-weight: bold;
+        border: 1px solid var(--win98-border);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+    }
+
+    /* Health status title bar colors */
+    .health-excellent .pipeline-title-bar {
+        background: linear-gradient(90deg, #006400 0%, #008000 100%);
+    }
+    .health-healthy .pipeline-title-bar {
+        background: linear-gradient(90deg, #006400 0%, #008000 100%);
+    }
+    .health-degraded .pipeline-title-bar {
+        background: linear-gradient(90deg, #B8860B 0%, #DAA520 100%);
+    }
+    .health-critical .pipeline-title-bar {
+        background: linear-gradient(90deg, #8B0000 0%, #DC143C 100%);
+    }
+    .health-unknown .pipeline-title-bar {
+        background: linear-gradient(90deg, var(--win98-inactive-title) 0%, var(--win98-shadow) 100%);
+    }
+
+    .pipeline-title-bar h2 {
+        margin: 0;
         font-size: 11px;
         font-weight: bold;
-        border-bottom: 1px solid var(--win98-shadow);
     }
 
-    .health-excellent .modern-header { background: #008000; }
-    .health-healthy .modern-header { background: #008000; }
-    .health-degraded .modern-header { background: #808000; }
-    .health-critical .modern-header { background: #800000; }
-    .health-unknown .modern-header { background: var(--win98-inactive-title); }
+    .health-status-row {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+    }
 
-    .modern-header h2 { margin: 0; font-size: 11px; font-weight: bold; display: inline; }
-    .health-row { float: right; }
-    .health-indicator { font-size: 11px; }
-    .progress-visual { font-family: monospace; font-size: 10px; margin-left: 4px; }
+    .health-indicator {
+        font-size: 11px;
+    }
 
-    /* Compact info sections */
-    .summary-section {
+    .progress-visual {
+        font-family: monospace;
+        font-size: 10px;
+    }
+
+    /* Content area */
+    .pipeline-content {
+        padding: var(--spacing-md);
+    }
+
+    /* Info sections styled like Windows controls */
+    .pipeline-info-panel {
         background: var(--win98-button-face);
         border: var(--border-sunken);
         border-color: var(--border-sunken-color);
         padding: var(--spacing-sm);
         margin-bottom: var(--spacing-sm);
-        font-size: 10px;
+        font-size: 11px;
     }
 
-    .schedule-info { margin: 0; font-weight: bold; color: var(--win98-text); }
-    .next-run-info { margin: 2px 0 0 0; color: var(--win98-accent); }
-    .trend-info { margin: 2px 0 0 0; font-family: monospace; }
-    .context-summary { margin: 2px 0 0 0; font-weight: bold; }
-
-    /* Compact insights */
-    .insight-normal, .insight-warning, .insight-critical {
-        margin: var(--spacing-sm) 0;
-        padding: var(--spacing-xs) var(--spacing-sm);
-        font-size: 10px;
-        border: 1px solid;
-    }
-
-    .insight-normal {
-        background: #C8F7C5; border-color: #4ADE80; color: #166534;
-    }
-    .insight-warning {
-        background: #FEF3C7; border-color: #FBBF24; color: #92400E;
-    }
-    .insight-critical {
-        background: #FEE2E2; border-color: #F87171; color: #991B1B;
-    }
-
-    /* Compact metrics */
-    .section-title {
-        margin: var(--spacing-sm) 0 var(--spacing-xs) 0;
-        font-size: 10px;
+    .schedule-info {
+        margin: 0;
         font-weight: bold;
         color: var(--win98-text);
     }
-    .metrics-list {
+
+    .next-run-info {
+        margin: var(--spacing-xs) 0 0 0;
+        color: var(--win98-accent);
+    }
+
+    .trend-info {
+        margin: var(--spacing-xs) 0 0 0;
+        font-family: monospace;
+    }
+
+    .context-summary {
+        margin: var(--spacing-xs) 0 0 0;
+        font-weight: bold;
+    }
+
+    /* Status messages styled as Windows message boxes */
+    .pipeline-insight {
+        margin: var(--spacing-sm) 0;
+        padding: var(--spacing-sm);
+        font-size: 11px;
+        border: var(--border-raised);
+        border-color: var(--border-raised-color);
+        background: var(--win98-face);
+    }
+
+    .insight-normal {
+        color: var(--win98-text);
+    }
+
+    .insight-warning {
+        background: var(--win98-button-face);
+        color: var(--win98-text);
+    }
+
+    .insight-critical {
+        background: var(--win98-button-face);
+        color: var(--win98-text);
+        border-color: var(--border-button-pressed);
+    }
+
+    /* Metrics in Windows list style */
+    .metrics-section-title {
+        margin: var(--spacing-sm) 0 var(--spacing-xs) 0;
+        font-size: 11px;
+        font-weight: bold;
+        color: var(--win98-text);
+    }
+
+    .pipeline-metrics-list {
         margin: 0;
         padding: 0;
         list-style: none;
-        font-size: 10px;
+        font-size: 11px;
+        background: var(--win98-text-light);
+        border: var(--border-sunken);
+        border-color: var(--border-sunken-color);
+        padding: var(--spacing-xs);
     }
-    .metrics-list li {
+
+    .pipeline-metrics-list li {
         display: flex;
         justify-content: space-between;
         margin: 1px 0;
-        padding: 1px 0;
+        padding: 1px var(--spacing-xs);
     }
-    .metric-value { font-weight: bold; color: var(--win98-accent); }
 
-    /* Typography consistency */
-    .back-link { color: var(--win98-text); text-decoration: underline; font-size: 11px; }
-    .generated-at { font-size: 10px; color: var(--win98-text); margin-top: var(--spacing-sm); }
+    .pipeline-metric-value {
+        font-weight: bold;
+        color: var(--win98-accent);
+    }
+
+    /* Navigation */
+    .pipeline-back-link {
+        color: var(--win98-accent);
+        text-decoration: none;
+        font-size: 11px;
+        margin-bottom: var(--spacing-md);
+        display: inline-block;
+    }
+
+    .pipeline-back-link:hover {
+        text-decoration: underline;
+    }
+
+    .pipeline-timestamp {
+        font-size: 11px;
+        color: var(--win98-shadow);
+        margin-top: var(--spacing-lg);
+        text-align: center;
+        padding: var(--spacing-sm);
+        background: var(--win98-button-face);
+        border: var(--border-sunken);
+        border-color: var(--border-sunken-color);
+    }
 
     /* Responsive - stack on mobile */
     @media (max-width: 768px) {
-        .pipeline-grid { grid-template-columns: 1fr; }
+        .pipeline-grid {
+            grid-template-columns: 1fr;
+        }
     }
     """
 )
@@ -489,17 +572,18 @@ async def pipeline_status():
             if pipeline.get("stale"):
                 card_classes.append("status-stale")
 
-            # Modern card header with health indicator
-            header_components = [
+            # Title bar with health indicator (Windows 98 style)
+            title_bar = Div(
                 H2(f"{pipeline_name} Pipeline"),
                 Div(
                     Span(f"{health_emoji} {health_status.title()}", _class="health-indicator"),
                     Span(pipeline.get("progress_bar", ""), _class="progress-visual"),
-                    _class="health-row",
+                    _class="health-status-row",
                 ),
-            ]
+                _class="pipeline-title-bar",
+            )
 
-            # Performance summary with sparkline
+            # Performance summary with sparkline (Windows control style)
             sparkline = pipeline.get("sparkline", "")
             summary_components = [
                 P(f"{pipeline.get('schedule_display', 'Unknown schedule')}", _class="schedule-info"),
@@ -514,69 +598,80 @@ async def pipeline_status():
             if context_summary and context_summary != "Never executed":
                 summary_components.append(P(context_summary, _class="context-summary"))
 
-            # Insights (actionable information)
+            info_panel = Div(*summary_components, _class="pipeline-info-panel")
+
+            # Insights as Windows message boxes
             insights = pipeline.get("insights", [])
             insight_components = []
             for insight in insights[:2]:  # Limit to 2 most important
                 if insight:
                     # Classify insight type by content
                     if insight.startswith(("✅", "⚡ Performance improving")):
-                        css_class = "insight-normal"
+                        css_class = "pipeline-insight insight-normal"
                     elif insight.startswith(("⚠️", "⏱️")):
-                        css_class = "insight-warning"
+                        css_class = "pipeline-insight insight-warning"
                     elif insight.startswith(("🚨", "🔥", "❌")):
-                        css_class = "insight-critical"
+                        css_class = "pipeline-insight insight-critical"
                     else:
-                        css_class = "insight-normal"  # Default to normal
+                        css_class = "pipeline-insight insight-normal"
 
-                    insight_components.append(P(insight, _class=css_class))
+                    insight_components.append(Div(insight, _class=css_class))
 
-            # Filtered metrics (outcomes only)
+            # Filtered metrics as Windows list box
             metrics = pipeline.get("filtered_metrics", {})
             metric_components = []
             if metrics and len(metrics) > 0:
                 metric_items = []
                 for key, value in sorted(metrics.items()):
-                    if str(value).isdigit() or isinstance(value, (int, float)):  # Only show numeric outcomes
-                        # Format the metric display
+                    if str(value).isdigit() or isinstance(value, (int, float)):
                         metric_items.append(
                             Li(
                                 Span(key),
-                                Span(str(value), _class="metric-value"),
+                                Span(str(value), _class="pipeline-metric-value"),
                             )
                         )
                 if metric_items:
                     metric_components = [
-                        H3("Key Metrics", _class="section-title"),
-                        Ul(*metric_items, _class="metrics-list"),
+                        H3("Key Metrics", _class="metrics-section-title"),
+                        Ul(*metric_items, _class="pipeline-metrics-list"),
                     ]
 
-            # Combine all components
+            # Combine content in proper Windows dialog structure
             card_content = [
-                Div(*header_components, _class="modern-header"),
-                Div(*summary_components, _class="summary-section"),
-                *insight_components,
-                *metric_components,
+                title_bar,
+                Div(
+                    info_panel,
+                    *insight_components,
+                    *metric_components,
+                    _class="pipeline-content",
+                ),
             ]
 
             cards.append(Div(*card_content, _class=" ".join(card_classes)))
 
-    # Retro Windows dashboard layout
+    # Main window layout matching homepage structure
     content = Div(
-        Div(
-            A("← Back", href="/", _class="back-link"),
-            H1("Pipeline Monitor", _class="window-title"),
-            P("Automated job status with performance metrics and diagnostics."),
-            Div(*cards, _class="pipeline-grid"),
-            P(f"Last Updated: {_format_timestamp(now.isoformat())}", _class="generated-at"),
-            _class="pipeline-page",
-        ),
+        A("← Back", href="/", _class="pipeline-back-link"),
+        H1("Pipeline Monitor", _class="window-title"),
+        P("Automated job status with performance metrics and diagnostics.", _class="intro"),
+        Div(*cards, _class="pipeline-grid"),
+        Div(f"Last Updated: {_format_timestamp(now.isoformat())}", _class="pipeline-timestamp"),
+        _class="main-window",
     )
 
     return Html(
         Head(
-            Title("Pipeline Status"),
+            Title("Pipeline Status - AI Tools Collection"),
+            Meta({"charset": "utf-8"}),
+            Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
+            Meta(
+                {
+                    "name": "description",
+                    "content": "Real-time pipeline monitoring dashboard with performance metrics.",
+                }
+            ),
             Meta(name="robots", content="index,follow"),
+            StyleX(str(Path(__file__).parent / "static/styles.css")),
             status_styles,
         ),
         Body(content),
