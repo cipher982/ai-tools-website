@@ -127,7 +127,7 @@ def _generate_enhanced_content(client: OpenAI, tool: Dict[str, Any]) -> Optional
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": user},
+                        {"type": "input_text", "text": user},
                     ],
                 }
             ],
