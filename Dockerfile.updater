@@ -30,7 +30,8 @@ COPY ai_tools_website/ ./ai_tools_website/
 # Copy scripts
 COPY scripts/run-update.sh /usr/local/bin/
 COPY scripts/run-enhancement.sh /usr/local/bin/
+COPY scripts/run-comparisons.sh /usr/local/bin/
 COPY scripts/crontab /etc/crontab
-RUN chmod +x /usr/local/bin/run-update.sh /usr/local/bin/run-enhancement.sh
+RUN chmod +x /usr/local/bin/run-update.sh /usr/local/bin/run-enhancement.sh /usr/local/bin/run-comparisons.sh
 
 CMD ["/usr/local/bin/supercronic", "/etc/crontab"] 
