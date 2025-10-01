@@ -112,6 +112,106 @@ def get_tools_for_category(category_slug: str) -> list:
     return [], None
 
 
+def find_comparison_by_slug(slug: str) -> tuple[dict, str, str]:
+    """Find comparison by its generated slug (tool1-vs-tool2)"""
+    all_tools = get_all_tools()
+
+    # Parse slug to extract tool names
+    if "-vs-" not in slug:
+        return None, None, None
+
+    parts = slug.split("-vs-")
+    if len(parts) != 2:
+        return None, None, None
+
+    tool1_slug, tool2_slug = parts
+
+    # Convert slugs to the format used in DB keys (replace hyphens with underscores)
+    tool1_key = tool1_slug.replace("-", "_")
+    tool2_key = tool2_slug.replace("-", "_")
+
+    # Search for comparisons in all tools
+    for tool in all_tools:
+        comparisons = tool.get("comparisons", {})
+        for comp_key, comparison in comparisons.items():
+            # Check if this comparison matches the slug (both directions)
+            if comp_key == f"{tool1_key}_vs_{tool2_key}" or comp_key == f"{tool2_key}_vs_{tool1_key}":
+                # Extract tool names from the comparison (fallback to parsing from key if opportunity is empty)
+                opportunity = comparison.get("opportunity", {})
+                tool1_name = opportunity.get("tool1", "")
+                tool2_name = opportunity.get("tool2", "")
+
+                # If opportunity is empty, try to extract from comparison title or generate from key
+                if not tool1_name or not tool2_name:
+                    title = comparison.get("title", "")
+                    if " vs " in title:
+                        parts = title.split(" vs ")
+                        if len(parts) >= 2:
+                            tool1_name = parts[0]
+                            tool2_name = parts[1].split(":")[0]  # Remove subtitle after colon
+
+                # Final fallback: generate from slug
+                if not tool1_name or not tool2_name:
+                    tool1_name = tool1_slug.replace("-", " ").title()
+                    tool2_name = tool2_slug.replace("-", " ").title()
+
+                return comparison, tool1_name, tool2_name
+
+    return None, None, None
+
+
+def get_all_comparisons() -> list:
+    """Get all available comparisons across all tools"""
+    all_tools = get_all_tools()
+    comparisons = []
+    seen_keys = set()
+
+    for tool in all_tools:
+        tool_comparisons = tool.get("comparisons", {})
+        for comp_key, comparison in tool_comparisons.items():
+            if comp_key not in seen_keys:
+                seen_keys.add(comp_key)
+
+                # Extract metadata - try opportunity first, then fallback to title parsing
+                opportunity = comparison.get("opportunity", {})
+                tool1_name = opportunity.get("tool1", "")
+                tool2_name = opportunity.get("tool2", "")
+
+                # If opportunity is empty, try to extract from title
+                if not tool1_name or not tool2_name:
+                    title = comparison.get("title", "")
+                    if " vs " in title:
+                        parts = title.split(" vs ")
+                        if len(parts) >= 2:
+                            tool1_name = parts[0]
+                            tool2_name = parts[1].split(":")[0]  # Remove subtitle after colon
+
+                # Final fallback: extract from comparison key
+                if not tool1_name or not tool2_name:
+                    if "_vs_" in comp_key:
+                        key_parts = comp_key.split("_vs_")
+                        if len(key_parts) == 2:
+                            tool1_name = key_parts[0].replace("_", " ").title()
+                            tool2_name = key_parts[1].replace("_", " ").title()
+
+                if tool1_name and tool2_name:
+                    # Generate slug for the comparison
+                    comp_slug = f"{generate_tool_slug(tool1_name)}-vs-{generate_tool_slug(tool2_name)}"
+
+                    comparisons.append(
+                        {
+                            "slug": comp_slug,
+                            "tool1_name": tool1_name,
+                            "tool2_name": tool2_name,
+                            "title": comparison.get("title", f"{tool1_name} vs {tool2_name}"),
+                            "meta_description": comparison.get("meta_description", ""),
+                            "last_updated": comparison.get("last_updated", ""),
+                        }
+                    )
+
+    return comparisons
+
+
 def get_base_url() -> str:
     """Get base URL for the site"""
     return os.getenv("BASE_URL", "https://ai-tools.dev")
@@ -158,6 +258,92 @@ def render_tool_sections(tool: dict) -> list:
     if limitation_items:
         blocks.append(H3(limitations.get("heading", "Limitations")))
         blocks.append(Ul(*[Li(item) for item in limitation_items]))
+
+    return blocks
+
+
+def render_comparison_sections(comparison: dict, tool1_name: str, tool2_name: str) -> list:
+    """Create content blocks for a comparison page."""
+    blocks = []
+
+    # Overview section
+    overview = comparison.get("overview", "")
+    if overview:
+        blocks.append(H2("Overview"))
+        blocks.append(P(overview))
+
+    # Detailed comparison sections
+    detailed = comparison.get("detailed_comparison", {})
+
+    # Pricing section
+    pricing = detailed.get("pricing", "")
+    if pricing:
+        blocks.append(H2("Pricing Comparison"))
+        blocks.append(P(pricing))
+
+    # Features section
+    features = detailed.get("features", "")
+    if features:
+        blocks.append(H2("Feature Comparison"))
+        blocks.append(P(features))
+
+    # Performance section
+    performance = detailed.get("performance", "")
+    if performance:
+        blocks.append(H2("Performance & Reliability"))
+        blocks.append(P(performance))
+
+    # Ease of use section
+    ease_of_use = detailed.get("ease_of_use", "")
+    if ease_of_use:
+        blocks.append(H2("Ease of Use"))
+        blocks.append(P(ease_of_use))
+
+    # Use cases section
+    use_cases = detailed.get("use_cases", "")
+    if use_cases:
+        blocks.append(H2("Use Cases & Recommendations"))
+        blocks.append(P(use_cases))
+
+    # Pros and cons section
+    pros_cons = comparison.get("pros_cons", {})
+    if pros_cons:
+        blocks.append(H2("Pros & Cons"))
+
+        tool1_pros = pros_cons.get("tool1_pros", [])
+        tool1_cons = pros_cons.get("tool1_cons", [])
+        tool2_pros = pros_cons.get("tool2_pros", [])
+        tool2_cons = pros_cons.get("tool2_cons", [])
+
+        if tool1_pros or tool1_cons:
+            blocks.append(H3(f"{tool1_name}"))
+            if tool1_pros:
+                blocks.append(H5("Pros:"))
+                blocks.append(Ul(*[Li(pro) for pro in tool1_pros]))
+            if tool1_cons:
+                blocks.append(H5("Cons:"))
+                blocks.append(Ul(*[Li(con) for con in tool1_cons]))
+
+        if tool2_pros or tool2_cons:
+            blocks.append(H3(f"{tool2_name}"))
+            if tool2_pros:
+                blocks.append(H5("Pros:"))
+                blocks.append(Ul(*[Li(pro) for pro in tool2_pros]))
+            if tool2_cons:
+                blocks.append(H5("Cons:"))
+                blocks.append(Ul(*[Li(con) for con in tool2_cons]))
+
+    # Community section
+    community = detailed.get("community", "")
+    if community:
+        blocks.append(H2("Community & Support"))
+        blocks.append(P(community))
+
+    # Verdict section
+    verdict = comparison.get("verdict", "")
+    if verdict:
+        blocks.append(H2("Final Verdict"))
+        blocks.append(P(verdict))
 
     return blocks
 
@@ -848,6 +1034,95 @@ async def get_tool_page(slug: str):
     )
 
 
+@rt("/compare/{slug}")
+async def get_comparison_page(slug: str):
+    """Comparison page with SEO optimization"""
+    comparison, tool1_name, tool2_name = find_comparison_by_slug(slug)
+    if not comparison or not tool1_name or not tool2_name:
+        return Html(
+            Head(Title("Comparison Not Found")), Body(H1("Comparison Not Found"), P(f"No comparison found for: {slug}"))
+        ), 404
+
+    base_url = get_base_url()
+    title = comparison.get("title", f"{tool1_name} vs {tool2_name}: Complete Comparison Guide")
+    meta_desc = comparison.get(
+        "meta_description", f"Compare {tool1_name} and {tool2_name}. Features, pricing, pros/cons analysis."
+    )
+
+    # Generate breadcrumbs
+    breadcrumbs = generate_breadcrumb_list(
+        [
+            {"name": "Home", "url": ""},
+            {"name": "Comparisons", "url": "comparisons"},
+            {"name": f"{tool1_name} vs {tool2_name}", "url": f"compare/{slug}"},
+        ],
+        base_url,
+    )
+
+    # Generate structured data for comparison
+    comparison_schema = {
+        "@context": "https://schema.org",
+        "@type": "Review",
+        "name": title,
+        "description": meta_desc,
+        "author": {"@type": "Organization", "name": "AI Tools Directory"},
+        "datePublished": comparison.get("last_updated", datetime.now().isoformat()),
+        "itemReviewed": [
+            {"@type": "SoftwareApplication", "name": tool1_name},
+            {"@type": "SoftwareApplication", "name": tool2_name},
+        ],
+    }
+
+    # Render comparison content
+    content_blocks = render_comparison_sections(comparison, tool1_name, tool2_name)
+
+    # Last updated info
+    last_updated = comparison.get("last_updated", "")
+    if last_updated:
+        try:
+            updated_date = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
+            formatted_date = updated_date.strftime("%B %d, %Y")
+        except ValueError:
+            formatted_date = last_updated
+    else:
+        formatted_date = "Recently"
+
+    return Html(
+        Head(
+            Title(title),
+            Meta({"charset": "utf-8"}),
+            Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
+            Meta({"name": "description", "content": meta_desc}),
+            Meta({"name": "robots", "content": "index, follow"}),
+            Meta({"property": "og:title", "content": title}),
+            Meta({"property": "og:description", "content": meta_desc}),
+            Meta({"property": "og:type", "content": "article"}),
+            Meta({"property": "og:url", "content": f"{base_url}/compare/{slug}"}),
+            Meta({"name": "article:author", "content": "AI Tools Directory"}),
+            Script(json.dumps(breadcrumbs), type="application/ld+json"),
+            Script(json.dumps(comparison_schema), type="application/ld+json"),
+            StyleX(str(Path(__file__).parent / "static/styles.css")),
+        ),
+        Body(
+            Div(
+                Section(
+                    H1(f"{tool1_name} vs {tool2_name}", _class="title"),
+                    P(f"Last updated: {formatted_date}", _class="last-updated"),
+                    *content_blocks,
+                    # Related tools section
+                    H2("Explore More Comparisons"),
+                    P(
+                        "Looking for other AI tool comparisons? Browse our complete directory to find "
+                        "the right tools for your needs."
+                    ),
+                    A("View All Tools", href="/", _class="cta-button"),
+                ),
+                _class="main-window",
+            )
+        ),
+    )
+
+
 @rt("/category/{category_slug}")
 async def get_category_page(category_slug: str):
     """Category hub page with SEO optimization"""
@@ -939,6 +1214,18 @@ async def get_sitemap():
                 "lastmod": current_date,  # TODO: Use actual tool last_updated when available
                 "changefreq": "monthly",
                 "priority": "0.7",
+            }
+        )
+
+    # Comparison pages
+    all_comparisons = get_all_comparisons()
+    for comparison in all_comparisons:
+        urls.append(
+            {
+                "loc": f"{base_url}/compare/{comparison['slug']}",
+                "lastmod": current_date,  # TODO: Use actual comparison last_updated when available
+                "changefreq": "monthly",
+                "priority": "0.6",
             }
         )
 
