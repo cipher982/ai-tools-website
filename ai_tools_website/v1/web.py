@@ -214,7 +214,7 @@ def get_all_comparisons() -> list:
 
 def get_base_url() -> str:
     """Get base URL for the site"""
-    return os.getenv("BASE_URL", "https://ai-tools.dev")
+    return os.environ["SERVICE_URL_WEB"]
 
 
 def render_tool_sections(tool: dict) -> list:
