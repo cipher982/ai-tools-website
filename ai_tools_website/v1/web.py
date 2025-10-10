@@ -927,6 +927,11 @@ async def get():
                 }
             ),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
+            Script(
+                defer=True,
+                src="https://analytics.drose.io/script.js",
+                data_website_id="33e9b5a0-5fbf-474c-9d60-9bee34d577bd",
+            ),
         ),
         Body(
             Div(
