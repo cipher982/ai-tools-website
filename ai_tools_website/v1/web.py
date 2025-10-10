@@ -499,7 +499,7 @@ def tool_card(tool):
     """Tool card component that links to internal tool page"""
     tool_slug = generate_tool_slug(tool["name"])
     return A(
-        {"href": f"/tools/{tool_slug}", "_class": "tool-card"},
+        {"href": url(f"/tools/{tool_slug}"), "_class": "tool-card"},
         H5(tool["name"]),
         P(tool["description"]),
         **{"data-search": f"{tool['name'].lower()} {tool['description'].lower()}"},
