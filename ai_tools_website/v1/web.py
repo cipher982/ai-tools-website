@@ -224,7 +224,8 @@ def get_all_comparisons() -> list:
 
 def get_base_url() -> str:
     """Get base URL for the site"""
-    return os.environ["SERVICE_URL_WEB"]
+    # For subdirectory deployment, construct from domain + base path
+    return os.getenv("SERVICE_URL_WEB", f"https://drose.io{BASE_PATH}")
 
 
 def render_tool_sections(tool: dict) -> list:
