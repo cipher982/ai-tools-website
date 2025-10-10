@@ -53,9 +53,19 @@ from ai_tools_website.v1.seo_utils import generate_tool_slug
 load_dotenv()
 setup_logging()
 
+# Base path for subdirectory deployment
+BASE_PATH = os.getenv("BASE_PATH", "").rstrip("/")
+
 # Simple global cache
 tools_cache: Dict = {}
 logger = logging.getLogger(__name__)
+
+
+def url(path: str) -> str:
+    """Prefix path with BASE_PATH for subdirectory deployment"""
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{BASE_PATH}{path}"
 
 
 def get_tools_by_category() -> Dict:
@@ -516,7 +526,7 @@ def category_section(name, tools, use_internal_links=False):
             cards.append(tool_card_external(t))
 
     category_slug = generate_category_slug(name)
-    category_link = A(name, href=f"/category/{category_slug}")
+    category_link = A(name, href=url(f"/category/{category_slug}"))
 
     return Section(
         H2(category_link if use_internal_links else name),
@@ -837,7 +847,7 @@ async def pipeline_status():
 
     # Main window layout matching homepage structure
     content = Div(
-        A("← Back", href="/", _class="pipeline-back-link"),
+        A("← Back", href=url("/"), _class="pipeline-back-link"),
         H1("Pipeline Monitor", _class="window-title"),
         P("Automated job status with performance metrics and diagnostics.", _class="intro"),
         Div(*cards, _class="pipeline-grid"),
@@ -995,9 +1005,9 @@ async def get_tool_page(slug: str):
             Div(
                 # Breadcrumb navigation
                 Div(
-                    A("Home", href="/"),
+                    A("Home", href=url("/")),
                     " › ",
-                    A(category, href=f"/category/{generate_category_slug(category)}"),
+                    A(category, href=url(f"/category/{generate_category_slug(category)}")),
                     " › ",
                     Span(tool["name"]),
                     _class="breadcrumbs",
@@ -1115,7 +1125,7 @@ async def get_comparison_page(slug: str):
                         "Looking for other AI tool comparisons? Browse our complete directory to find "
                         "the right tools for your needs."
                     ),
-                    A("View All Tools", href="/", _class="cta-button"),
+                    A("View All Tools", href=url("/"), _class="cta-button"),
                 ),
                 _class="main-window",
             )
@@ -1162,7 +1172,7 @@ async def get_category_page(category_slug: str):
         Body(
             Div(
                 # Breadcrumb navigation
-                Div(A("Home", href="/"), " › ", Span(f"AI {category_name} Tools"), _class="breadcrumbs"),
+                Div(A("Home", href=url("/")), " › ", Span(f"AI {category_name} Tools"), _class="breadcrumbs"),
                 # Main content
                 H1(f"Best AI {category_name} Tools", _class="category-title"),
                 P(

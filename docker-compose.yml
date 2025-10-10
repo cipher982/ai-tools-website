@@ -1,12 +1,17 @@
 services:
-  web:
+  aitools-web:
     build:
       context: .
       dockerfile: Dockerfile
-    env_file: 
+    env_file:
       - .env
-    ports:
-      - "${WEB_PORT}:${WEB_PORT}"
+    expose:
+      - "${WEB_PORT}"
+    environment:
+      - BASE_PATH=/aitools
+    networks:
+      - coolify
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${WEB_PORT}/health"]
       interval: 30s
@@ -14,11 +19,14 @@ services:
       retries: 3
       start_period: 10s
 
-  updater:
+  aitools-updater:
     build:
       context: .
       dockerfile: Dockerfile.updater
     env_file: .env
+    networks:
+      - coolify
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "pgrep", "supercronic"]
       interval: 30s
@@ -26,4 +34,9 @@ services:
       retries: 3
       start_period: 5s
     depends_on:
-      - web
+      - aitools-web
+
+networks:
+  coolify:
+    name: coolify
+    external: true
