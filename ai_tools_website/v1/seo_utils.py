@@ -6,6 +6,19 @@ from typing import Dict
 from typing import List
 from urllib.parse import urlparse
 
+DEFAULT_MAX_SLUG_LENGTH = 60
+STOPWORDS = {
+    "ai",
+    "app",
+    "apps",
+    "and",
+    "for",
+    "the",
+    "tool",
+    "tools",
+    "with",
+}
+
 
 def generate_slug(text: str, max_length: int = 50) -> str:
     """
@@ -51,7 +64,39 @@ def generate_slug(text: str, max_length: int = 50) -> str:
     return text
 
 
-def generate_tool_slug(tool_name: str, vendor_name: str = None) -> str:
+def _truncate_slug(parts: List[str], max_length: int) -> str:
+    """Truncate slug parts to max length while preserving whole tokens where possible."""
+    if not parts:
+        return ""
+
+    truncated: List[str] = []
+    total_length = 0
+
+    for part in parts:
+        part_length = len(part)
+        separator = 1 if truncated else 0
+        if total_length + separator + part_length > max_length:
+            break
+        truncated.append(part)
+        total_length += separator + part_length
+
+    if truncated:
+        return "-".join(truncated)
+
+    # Fallback to hard trim if nothing fits
+    raw = "-".join(parts)
+    return raw[:max_length].strip("-")
+
+
+def _sanitize_slug_parts(parts: List[str]) -> List[str]:
+    """Remove repetitive stopwords while leaving at least one token."""
+    if not parts:
+        return []
+    filtered = [token for token in parts if token not in STOPWORDS]
+    return filtered or parts
+
+
+def generate_tool_slug(tool_name: str, vendor_name: str = None, *, disambiguator: str | None = None) -> str:
     """
     Generate tool-specific slug with disambiguation logic.
 
@@ -60,29 +105,50 @@ def generate_tool_slug(tool_name: str, vendor_name: str = None) -> str:
     - "Claude 3.5 Sonnet" -> "claude-3-5-sonnet"
     - "GitHub Copilot" -> "github-copilot" (keep vendor for disambiguation)
     """
-    slug = generate_slug(tool_name)
+    base_slug = generate_slug(tool_name, max_length=DEFAULT_MAX_SLUG_LENGTH)
+    used_disambiguator_as_base = False
 
-    # Common vendor prefixes that should be kept for disambiguation
-    vendor_keywords = ["openai", "anthropic", "google", "microsoft", "github", "adobe"]
+    if not base_slug and disambiguator:
+        base_slug = generate_slug(disambiguator, max_length=DEFAULT_MAX_SLUG_LENGTH)
+        if base_slug:
+            used_disambiguator_as_base = True
 
-    # If slug doesn't contain vendor info but vendor is important for disambiguation
-    if vendor_name and not any(keyword in slug for keyword in vendor_keywords):
-        vendor_slug = generate_slug(vendor_name)
-        if vendor_slug in vendor_keywords:
-            slug = f"{vendor_slug}-{slug}"
+    if not base_slug and vendor_name:
+        base_slug = generate_slug(vendor_name, max_length=DEFAULT_MAX_SLUG_LENGTH)
+    if not base_slug:
+        return ""
+
+    parts = _sanitize_slug_parts(base_slug.split("-"))
+    slug = _truncate_slug(parts, DEFAULT_MAX_SLUG_LENGTH)
+
+    if vendor_name:
+        vendor_slug = generate_slug(vendor_name, max_length=20)
+        if vendor_slug and not slug.startswith(f"{vendor_slug}-"):
+            slug = _truncate_slug([vendor_slug] + slug.split("-"), DEFAULT_MAX_SLUG_LENGTH)
+
+    if disambiguator and not used_disambiguator_as_base:
+        disambiguator_slug = generate_slug(disambiguator, max_length=15)
+        if disambiguator_slug:
+            slug = _truncate_slug(slug.split("-") + [disambiguator_slug], DEFAULT_MAX_SLUG_LENGTH)
 
     return slug
 
 
 def generate_category_slug(category_name: str) -> str:
     """Generate category slug with consistent formatting."""
-    return generate_slug(category_name)
+    return generate_slug(category_name, max_length=DEFAULT_MAX_SLUG_LENGTH)
 
 
-def generate_comparison_slug(tool1_name: str, tool2_name: str) -> str:
+def generate_comparison_slug(
+    tool1_name: str,
+    tool2_name: str,
+    *,
+    tool1_slug: str | None = None,
+    tool2_slug: str | None = None,
+) -> str:
     """Generate comparison page slug."""
-    slug1 = generate_slug(tool1_name, max_length=20)
-    slug2 = generate_slug(tool2_name, max_length=20)
+    slug1 = tool1_slug or generate_slug(tool1_name, max_length=25)
+    slug2 = tool2_slug or generate_slug(tool2_name, max_length=25)
     return f"{slug1}-vs-{slug2}"
 
 
@@ -171,7 +237,8 @@ def generate_breadcrumb_list(path_segments: List[Dict[str, str]], base_url: str)
 
 def generate_product_schema(tool: Dict, base_url: str) -> Dict:
     """Generate Product/SoftwareApplication JSON-LD schema."""
-    tool_url = f"{base_url}/tools/{generate_tool_slug(tool['name'])}"
+    tool_slug = tool.get("slug") or generate_tool_slug(tool["name"])
+    tool_url = f"{base_url}/tools/{tool_slug}"
 
     schema = {
         "@context": "https://schema.org",

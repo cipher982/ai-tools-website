@@ -3,7 +3,10 @@
 import asyncio
 import logging
 import os
+import uuid
 from collections import defaultdict
+from datetime import datetime
+from datetime import timezone
 from typing import Dict
 from typing import List
 from typing import Literal
@@ -27,6 +30,12 @@ from .logging_config import IndentLogger
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import SEARCH_MODEL
+from .seo_utils import generate_tool_slug
+from .slug_registry import collect_existing_slugs
+from .slug_registry import ensure_unique_slug
+from .slug_registry import load_slug_registry
+from .slug_registry import register_tool_slug
+from .slug_registry import save_slug_registry
 
 load_dotenv()
 
@@ -611,32 +620,85 @@ async def find_new_tools(*, use_search_cache: bool = False, dry_run: bool = Fals
                         logger.info(f"{tool.action.upper()}: {tool.name} - {tool.reasoning}")
                 logger.dedent()
             else:
-                # Handle updates first
+                now_iso = datetime.now(timezone.utc).isoformat()
+                registry = load_slug_registry()
+                used_slugs = collect_existing_slugs(registry)
+
+                tools_list = current_tools.setdefault("tools", [])
+
+                # Normalize existing tool identifiers and slugs before applying updates
+                for existing in tools_list:
+                    tool_id = existing.get("id")
+                    if not tool_id:
+                        tool_id = str(uuid.uuid4())
+                        existing["id"] = tool_id
+                    slug = existing.get("slug")
+                    if slug:
+                        used_slugs.add(slug)
+                        register_tool_slug(registry, tool_id, slug)
+
+                # Handle updates first to preserve indices
                 for tool in [t for t in verified if t.action == "update" and t.existing_index is not None]:
-                    current_tools["tools"][tool.existing_index] = {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "url": tool.url,
-                        "category": tool.category,
-                    }
+                    existing_entry = tools_list[tool.existing_index]
+                    tool_id = existing_entry.get("id") or str(uuid.uuid4())
+                    existing_entry["id"] = tool_id
+
+                    slug = existing_entry.get("slug")
+                    if not slug:
+                        slug_candidate = generate_tool_slug(tool.name)
+                        if not slug_candidate:
+                            slug_candidate = generate_tool_slug(tool.name, disambiguator=tool_id[:6])
+                        slug = ensure_unique_slug(slug_candidate, used_slugs)
+                        existing_entry["slug"] = slug
+                    register_tool_slug(registry, tool_id, slug)
+
+                    existing_entry.update(
+                        {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "url": tool.url,
+                            "category": tool.category,
+                            "last_reviewed_at": now_iso,
+                            "last_indexed_at": now_iso,
+                        }
+                    )
                     logger.info(f"Updated tool: {tool.name}")
 
                 # Handle additions
-                new_tools = [
-                    {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "url": tool.url,
-                        "category": tool.category,
-                    }
-                    for tool in verified
-                    if tool.action == "add"
-                ]
+                new_tools = []
+                for tool in verified:
+                    if tool.action != "add":
+                        continue
+
+                    tool_id = str(uuid.uuid4())
+                    slug_candidate = generate_tool_slug(tool.name)
+                    if not slug_candidate:
+                        slug_candidate = generate_tool_slug(tool.name, disambiguator=tool_id[:6])
+                    canonical_slug = ensure_unique_slug(slug_candidate, used_slugs)
+                    register_tool_slug(registry, tool_id, canonical_slug)
+
+                    new_tools.append(
+                        {
+                            "id": tool_id,
+                            "slug": canonical_slug,
+                            "name": tool.name,
+                            "description": tool.description,
+                            "url": tool.url,
+                            "category": tool.category,
+                            "discovered_at": now_iso,
+                            "last_reviewed_at": now_iso,
+                            "last_enhanced_at": "",
+                            "last_indexed_at": now_iso,
+                        }
+                    )
+
                 if new_tools:
-                    current_tools["tools"].extend(new_tools)
+                    tools_list.extend(new_tools)
                     logger.info(f"Added {len(new_tools)} new tools")
 
+                current_tools["slug_registry_version"] = 1
                 save_tools(current_tools)
+                save_slug_registry(registry)
 
         logger.dedent()
         logger.info("Tool discovery complete")

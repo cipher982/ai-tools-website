@@ -4,3 +4,5 @@
 0 3 * * 1 /usr/local/bin/run-enhancement.sh >> /var/log/cron.log 2>&1
 # Monthly comparison generation on first of month at 04:00 UTC
 0 4 1 * * /usr/local/bin/run-comparisons.sh >> /var/log/cron.log 2>&1
+# Daily sitemap publish at 05:00 UTC
+0 5 * * * /usr/local/bin/run-sitemaps.sh >> /var/log/cron.log 2>&1

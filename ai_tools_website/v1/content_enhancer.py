@@ -255,7 +255,11 @@ def enhance_tools(*, max_per_run: int, stale_days: int, dry_run: bool, force: bo
                 continue
 
             tool["enhanced_content"] = normalized
-            tool["enhanced_at"] = datetime.now(timezone.utc).isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
+            tool["enhanced_at"] = timestamp
+            tool["last_enhanced_at"] = timestamp
+            tool["last_reviewed_at"] = timestamp
+            tool["last_indexed_at"] = timestamp
             updated_count += 1
 
         if updated_count and not dry_run:

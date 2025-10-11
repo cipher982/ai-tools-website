@@ -10,6 +10,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
 import click
 from dotenv import load_dotenv
@@ -21,6 +22,13 @@ from .data_manager import save_tools
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import COMPARISON_GENERATOR_MODEL
+from .seo_utils import generate_comparison_slug
+from .seo_utils import generate_tool_slug
+from .slug_registry import collect_existing_slugs
+from .slug_registry import ensure_unique_slug
+from .slug_registry import load_slug_registry
+from .slug_registry import register_comparison_slug
+from .slug_registry import save_slug_registry
 
 load_dotenv()
 setup_logging()
@@ -31,6 +39,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_PER_RUN = int(os.getenv("COMPARISON_GENERATOR_MAX_PER_RUN", "10"))
 DEFAULT_STALE_DAYS = int(os.getenv("COMPARISON_GENERATOR_STALE_DAYS", "7"))
 COMPARISON_OPPORTUNITIES_FILE = "comparison_opportunities.json"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _strip_json_content(value: str) -> str:
@@ -336,7 +348,12 @@ def _needs_comparison_generation(
     return True
 
 
-def _store_comparison_in_tools(comparison: Dict[str, Any], tools_data: Dict[str, Any]) -> None:
+def _store_comparison_in_tools(
+    comparison: Dict[str, Any],
+    tools_data: Dict[str, Any],
+    registry: Dict[str, Any],
+    used_slugs: Set[str],
+) -> None:
     """Store generated comparison in the tools database structure."""
 
     opportunity = comparison.get("opportunity", {})
@@ -347,40 +364,71 @@ def _store_comparison_in_tools(comparison: Dict[str, Any], tools_data: Dict[str,
         logger.error("Cannot store comparison without tool names")
         return
 
-    # Create comparison key (normalized)
-    comparison_key = f"{tool1_name.lower().replace(' ', '_')}_vs_{tool2_name.lower().replace(' ', '_')}"
+    def find_tool(name: str) -> Optional[Dict[str, Any]]:
+        for tool in tools_data.get("tools", []):
+            if tool.get("name", "").strip().lower() == name.lower():
+                return tool
+        return None
 
-    # Remove opportunity metadata before storing
+    tool1_entry = find_tool(tool1_name)
+    tool2_entry = find_tool(tool2_name)
+
+    tool1_id = tool1_entry.get("id") if tool1_entry else tool1_name.lower()
+    tool2_id = tool2_entry.get("id") if tool2_entry else tool2_name.lower()
+    tool1_slug = (tool1_entry.get("slug") if tool1_entry else None) or generate_tool_slug(tool1_name)
+    tool2_slug = (tool2_entry.get("slug") if tool2_entry else None) or generate_tool_slug(tool2_name)
+
+    comparison_key = f"{tool1_name.lower().replace(' ', '_')}_vs_{tool2_name.lower().replace(' ', '_')}"
     comparison_clean = {k: v for k, v in comparison.items() if k != "opportunity"}
 
-    # Find both tools in database and add comparison to both
+    base_slug = comparison_clean.get("slug") or generate_comparison_slug(
+        tool1_name,
+        tool2_name,
+        tool1_slug=tool1_slug,
+        tool2_slug=tool2_slug,
+    )
+
+    participants = {"tool1": tool1_id, "tool2": tool2_id}
+    registry_key = "__".join(sorted(participants.values()))
+    existing_entry = registry.get("comparisons", {}).get(registry_key, {})
+    current_slug = existing_entry.get("current")
+    if current_slug:
+        used_slugs.discard(current_slug)
+
+    canonical_slug = ensure_unique_slug(base_slug, used_slugs)
+    comparison_clean["slug"] = canonical_slug
+
+    last_generated = comparison_clean.get("last_generated_at") or comparison_clean.get("generated_at") or _now_iso()
+    comparison_clean["last_generated_at"] = last_generated
+    comparison_clean.pop("generated_at", None)
+
+    register_comparison_slug(registry, registry_key, canonical_slug, participants=participants)
+
     all_tools = tools_data.get("tools", [])
     tools_updated = 0
-
     for tool in all_tools:
         tool_name = tool.get("name", "").strip().lower()
-
         if (
             tool_name == tool1_name.lower()
             or tool_name == tool2_name.lower()
             or tool1_name.lower() in tool_name
             or tool2_name.lower() in tool_name
         ):
-            # Initialize comparisons dict if it doesn't exist
-            if "comparisons" not in tool:
-                tool["comparisons"] = {}
-
-            tool["comparisons"][comparison_key] = comparison_clean
+            tool.setdefault("comparisons", {})
+            # Use distinct copies to prevent shared mutations
+            payload = comparison_clean if tools_updated == 0 else dict(comparison_clean)
+            tool["comparisons"][comparison_key] = payload
+            tool["last_reviewed_at"] = last_generated
+            tool["last_indexed_at"] = last_generated
             tools_updated += 1
             logger.info(f"Added comparison to tool: {tool.get('name')}")
 
-    if tools_updated == 0:
-        # If no matching tools found, add to first tool as fallback
-        if all_tools:
-            if "comparisons" not in all_tools[0]:
-                all_tools[0]["comparisons"] = {}
-            all_tools[0]["comparisons"][comparison_key] = comparison_clean
-            logger.info(f"Added comparison as fallback to: {all_tools[0].get('name')}")
+    if tools_updated == 0 and all_tools:
+        all_tools[0].setdefault("comparisons", {})
+        all_tools[0]["comparisons"][comparison_key] = dict(comparison_clean)
+        all_tools[0]["last_reviewed_at"] = last_generated
+        all_tools[0]["last_indexed_at"] = last_generated
+        logger.info(f"Added comparison as fallback to: {all_tools[0].get('name')}")
 
 
 def generate_comparisons(*, max_per_run: int, stale_days: int, dry_run: bool, force: bool) -> None:
@@ -391,6 +439,12 @@ def generate_comparisons(*, max_per_run: int, stale_days: int, dry_run: bool, fo
         # Load data
         opportunities = _load_comparison_opportunities()
         tools_data = load_tools()
+        registry = load_slug_registry()
+        used_slugs = collect_existing_slugs(registry)
+        for existing_tool in tools_data.get("tools", []):
+            slug = existing_tool.get("slug")
+            if slug:
+                used_slugs.add(slug)
         stale_after = timedelta(days=stale_days)
 
         summary.add_attribute("dry_run", dry_run)
@@ -441,7 +495,7 @@ def generate_comparisons(*, max_per_run: int, stale_days: int, dry_run: bool, fo
 
             if comparison:
                 if not dry_run:
-                    _store_comparison_in_tools(comparison, tools_data)
+                    _store_comparison_in_tools(comparison, tools_data, registry, used_slugs)
                     logger.info(f"Stored comparison: {tool1_name} vs {tool2_name}")
                 else:
                     logger.info(f"Dry run: Would store comparison: {tool1_name} vs {tool2_name}")
@@ -453,7 +507,9 @@ def generate_comparisons(*, max_per_run: int, stale_days: int, dry_run: bool, fo
 
         # Save updated tools data
         if generated_count > 0 and not dry_run:
+            tools_data["slug_registry_version"] = 1
             save_tools(tools_data)
+            save_slug_registry(registry)
             logger.info(f"Saved tools database with {generated_count} new comparisons")
 
         # Add metrics

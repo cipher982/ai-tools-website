@@ -3,7 +3,7 @@
 **Project**: AI Tools Website - Comparison Generator Feature
 **Implementation Date**: October 1-2, 2025
 **Status**: ✅ Complete & Production Deployed
-**Live Example**: https://aitools.drose.io/compare/replicate-vs-hugging-face
+**Live Example**: https://drose.io/aitools/compare/replicate-vs-hugging-face
 
 ---
 
@@ -280,7 +280,7 @@ In our test run: **1 comparison rejected, 1 approved** - exactly the quality con
 ## 📈 Current Production Status
 
 ### Live Comparisons
-1. **Replicate vs Hugging Face**: https://aitools.drose.io/compare/replicate-vs-hugging-face
+1. **Replicate vs Hugging Face**: https://drose.io/aitools/compare/replicate-vs-hugging-face
    - 12,000+ characters of research-backed content
    - Natural citations from pricing pages, documentation, reviews
    - Comprehensive analysis: pricing, features, performance, use cases
@@ -471,7 +471,7 @@ Test Run Results:
 <title>Replicate vs Hugging Face: Complete Comparison Guide (2025)</title>
 <meta name="description" content="Compare Replicate and Hugging Face for model serving — pricing, features, performance...">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://aitools.drose.io/compare/replicate-vs-hugging-face">
+<meta property="og:url" content="https://drose.io/aitools/compare/replicate-vs-hugging-face">
 ```
 
 ### Structured Data Implementation
@@ -494,7 +494,7 @@ Comparisons automatically added to sitemap.xml with:
 ```bash
 # Core API access
 OPENAI_API_KEY=your-key
-SERVICE_URL_WEB=https://aitools.drose.io
+SERVICE_URL_WEB=https://drose.io/aitools
 
 # MinIO storage
 MINIO_ENDPOINT=your-endpoint
@@ -710,4 +710,4 @@ The AI Tool Comparison System is now **autonomously generating research-backed t
 
 *Generated: October 2, 2025*
 *Implementation Team: David Rose + Claude Code*
-*Live URL: https://aitools.drose.io/compare/replicate-vs-hugging-face*
+*Live URL: https://drose.io/aitools/compare/replicate-vs-hugging-face*

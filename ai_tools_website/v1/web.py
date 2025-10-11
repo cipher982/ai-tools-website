@@ -23,6 +23,7 @@ from fasthtml.common import Input
 from fasthtml.common import Li
 from fasthtml.common import Meta
 from fasthtml.common import P
+from fasthtml.common import Response
 from fasthtml.common import Script
 from fasthtml.common import Section
 from fasthtml.common import Span
@@ -49,6 +50,9 @@ from ai_tools_website.v1.seo_utils import generate_meta_description
 from ai_tools_website.v1.seo_utils import generate_meta_title
 from ai_tools_website.v1.seo_utils import generate_product_schema
 from ai_tools_website.v1.seo_utils import generate_tool_slug
+from ai_tools_website.v1.sitemap_builder import SITEMAP_FILES
+from ai_tools_website.v1.sitemap_builder import build_sitemaps
+from ai_tools_website.v1.sitemap_builder import fetch_sitemap
 
 load_dotenv()
 setup_logging()
@@ -59,6 +63,7 @@ BASE_PATH = os.getenv("BASE_PATH", "").rstrip("/")
 # Simple global cache
 tools_cache: Dict = {}
 logger = logging.getLogger(__name__)
+ALLOWED_SITEMAP_FILES = set(SITEMAP_FILES.keys()) | {"sitemap-index.xml"}
 
 
 def url(path: str) -> str:
@@ -1193,73 +1198,42 @@ async def get_category_page(category_slug: str):
     )
 
 
+def _fetch_local_sitemap(filename: str) -> str | None:
+    """Load sitemap from MinIO storage or rebuild on demand."""
+    content = fetch_sitemap(filename)
+    if content is not None:
+        return content
+
+    logger.warning("Sitemap %s missing from storage, rebuilding on the fly", filename)
+    tools = load_tools()
+    sitemap_blobs = build_sitemaps(tools, get_base_url())
+    blob = sitemap_blobs.get(filename)
+    if blob is None:
+        return None
+    return blob.decode("utf-8")
+
+
 @rt("/sitemap.xml")
 async def get_sitemap():
-    """Generate XML sitemap with all pages"""
-    base_url = get_base_url()
-    tools_by_category = get_tools_by_category()
-    all_tools = get_all_tools()
+    """Serve the sitemap index"""
+    content = _fetch_local_sitemap("sitemap-index.xml")
+    if content is None:
+        return Response("Sitemap unavailable", status_code=503)
+    return Response(content, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
 
-    # Use current date for lastmod
-    current_date = datetime.now().strftime("%Y-%m-%d")
 
-    # Build sitemap URLs
-    urls = []
+@rt("/sitemaps/{filename}")
+async def get_sitemap_file(filename: str):
+    """Serve individual sitemap documents."""
+    sanitized = filename.strip("/")
+    if sanitized not in ALLOWED_SITEMAP_FILES:
+        return Html(Body(H1("Not Found"), P("Sitemap not available."))), 404
 
-    # Homepage
-    urls.append({"loc": base_url, "lastmod": current_date, "changefreq": "weekly", "priority": "1.0"})
+    content = _fetch_local_sitemap(sanitized)
+    if content is None:
+        return Html(Body(H1("Not Found"), P("Sitemap not available."))), 404
 
-    # Category pages
-    for category in tools_by_category.keys():
-        category_slug = generate_category_slug(category)
-        urls.append(
-            {
-                "loc": f"{base_url}/category/{category_slug}",
-                "lastmod": current_date,
-                "changefreq": "weekly",
-                "priority": "0.8",
-            }
-        )
-
-    # Individual tool pages
-    for tool in all_tools:
-        tool_slug = generate_tool_slug(tool["name"])
-        urls.append(
-            {
-                "loc": f"{base_url}/tools/{tool_slug}",
-                "lastmod": current_date,  # TODO: Use actual tool last_updated when available
-                "changefreq": "monthly",
-                "priority": "0.7",
-            }
-        )
-
-    # Comparison pages
-    all_comparisons = get_all_comparisons()
-    for comparison in all_comparisons:
-        urls.append(
-            {
-                "loc": f"{base_url}/compare/{comparison['slug']}",
-                "lastmod": current_date,  # TODO: Use actual comparison last_updated when available
-                "changefreq": "monthly",
-                "priority": "0.6",
-            }
-        )
-
-    # Generate XML sitemap
-    xml_content = ['<?xml version="1.0" encoding="UTF-8"?>']
-    xml_content.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
-
-    for url in urls:
-        xml_content.append("  <url>")
-        xml_content.append(f'    <loc>{url["loc"]}</loc>')
-        xml_content.append(f'    <lastmod>{url["lastmod"]}</lastmod>')
-        xml_content.append(f'    <changefreq>{url["changefreq"]}</changefreq>')
-        xml_content.append(f'    <priority>{url["priority"]}</priority>')
-        xml_content.append("  </url>")
-
-    xml_content.append("</urlset>")
-
-    return "\n".join(xml_content), {"Content-Type": "application/xml"}
+    return Response(content, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @rt("/health")

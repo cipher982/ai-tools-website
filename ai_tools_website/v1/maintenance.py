@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+from datetime import datetime
+from datetime import timezone
 from typing import List
 
 from pydantic import BaseModel
@@ -131,6 +133,7 @@ Analyze this categorization and suggest a revised category structure.""",
             logger.info("Auto-accepting changes...")
 
         logger.info("Applying changes...")
+        timestamp = datetime.now(timezone.utc).isoformat()
         updated_tools = []
 
         # Create mapping of old -> new categories
@@ -157,10 +160,14 @@ Analyze this categorization and suggest a revised category structure.""",
                 renamed_count += 1
                 logger.info(f"Updating category for {tool['name']}: {current_cat} -> {new_tool['category']}")
 
+            new_tool["last_reviewed_at"] = timestamp
+            new_tool["last_indexed_at"] = timestamp
+
             updated_tools.append(new_tool)
 
         # Save changes
         current["tools"] = updated_tools
+        current["slug_registry_version"] = 1
         save_tools(current)
         summary.add_metric("tools_reassigned", moved_count)
         summary.add_metric("tools_renamed", renamed_count)

@@ -2,7 +2,7 @@
 
 A modern Python web application for aggregating and browsing AI tools. Built with FastHTML for the frontend and featuring AI-powered search capabilities.
 
-### 🌐 Live at: [aitools.drose.io](https://aitools.drose.io)
+### 🌐 Live at: [drose.io/aitools](https://drose.io/aitools)
 [![Status](https://img.shields.io/uptimerobot/status/m798586414-bbbff2fcd214a94434a62dc7)](https://stats.uptimerobot.com/Jlo4zDIBm8)
 [![Uptime](https://img.shields.io/uptimerobot/ratio/30/m798586414-bbbff2fcd214a94434a62dc7)](https://stats.uptimerobot.com/Jlo4zDIBm8)
 
@@ -202,7 +202,7 @@ uv run python -m ai_tools_website.web
 uv run python -m ai_tools_website.search
 ```
 
-Visit `https://aitools.drose.io` or `http://localhost:8000` (for local development) in your browser.
+Visit `https://drose.io/aitools` or `http://localhost:8000` (for local development) in your browser.
 
 ## Configuration
 
@@ -263,6 +263,12 @@ The application is containerized using Docker with two services:
    - Built from `Dockerfile.updater`
    - Automatically keeps tool data fresh
    - Includes health monitoring
+
+### Sitemap Publishing
+
+- Nightly sitemap exports run inside the updater container via `run-sitemaps.sh` (scheduled in `scripts/crontab` at 05:00 UTC).
+- You can generate the XML bundle manually with `uv run python -m ai_tools_website.v1.sitemap_builder --dry-run` or omit `--dry-run` to publish directly to MinIO.
+- Sitemaps are stored under the `sitemaps/` prefix in object storage and served through `/sitemap.xml` plus `/sitemaps/<file>.xml` routes.
 
 To deploy using Docker Compose:
 

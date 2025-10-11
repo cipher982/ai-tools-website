@@ -3,6 +3,8 @@
 import json
 import logging
 import os
+from datetime import datetime
+from datetime import timezone
 from io import BytesIO
 from typing import Dict
 
@@ -66,6 +68,8 @@ def save_tools(tools_data: Dict) -> None:
     """Save tools data to Minio storage."""
     client = get_minio_client()
     try:
+        tools_data.setdefault("tools", [])
+        tools_data["last_updated"] = datetime.now(timezone.utc).isoformat()
         data = BytesIO(json.dumps(tools_data, indent=2).encode())
         client.put_object(
             BUCKET_NAME,
