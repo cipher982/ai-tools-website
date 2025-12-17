@@ -89,16 +89,10 @@ class TrailingSlashMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         # Skip root path and paths without trailing slash
         if path != "/" and path.endswith("/"):
-            # Build proper redirect URL with BASE_PATH and force HTTPS
+            # Build proper redirect URL with BASE_PATH, always HTTPS
             new_path = BASE_PATH + path.rstrip("/")
-            # Use the host from the request, but force https in production
-            scheme = "https" if request.headers.get("x-forwarded-proto") == "https" else request.url.scheme
-            # For production behind Cloudflare/Caddy, always use https
-            if os.getenv("PRODUCTION", "").lower() in ("true", "1"):
-                scheme = "https"
-            # Preserve query string if present
             query = f"?{request.url.query}" if request.url.query else ""
-            redirect_url = f"{scheme}://{request.url.netloc}{new_path}{query}"
+            redirect_url = f"https://{request.url.netloc}{new_path}{query}"
             return RedirectResponse(url=redirect_url, status_code=308)
         return await call_next(request)
 
