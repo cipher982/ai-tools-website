@@ -180,4 +180,5 @@ cython_debug/
 # FastHTML
 .sesskey
 search_cache/
-scratch/CLAUDE.md
+scratch/
+CLAUDE.md
