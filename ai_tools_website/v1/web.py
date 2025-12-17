@@ -65,6 +65,37 @@ setup_logging()
 # Base path for subdirectory deployment
 BASE_PATH = os.getenv("BASE_PATH", "").rstrip("/")
 
+# Umami Analytics Configuration
+UMAMI_WEBSITE_ID = os.getenv("UMAMI_WEBSITE_ID", "")
+UMAMI_SCRIPT_SRC = os.getenv("UMAMI_SCRIPT_SRC", "https://analytics.drose.io/script.js")
+UMAMI_DOMAINS = os.getenv("UMAMI_DOMAINS", "drose.io")
+UMAMI_DROSE_ID = os.getenv("UMAMI_DROSE_ID", "33e9b5a0-5fbf-474c-9d60-9bee34d577bd")
+
+
+def umami_scripts() -> list:
+    """Generate Umami analytics scripts for dual tracking (project + drose.io aggregate).
+
+    Returns empty list if UMAMI_WEBSITE_ID is not set (e.g., local dev).
+    """
+    if not UMAMI_WEBSITE_ID:
+        return []
+
+    return [
+        # Project-specific tracking
+        Script(
+            defer=True,
+            src=UMAMI_SCRIPT_SRC,
+            **{"data-website-id": UMAMI_WEBSITE_ID, "data-domains": UMAMI_DOMAINS},
+        ),
+        # Domain aggregate tracking (counts toward total drose.io traffic)
+        Script(
+            defer=True,
+            src=UMAMI_SCRIPT_SRC,
+            **{"data-website-id": UMAMI_DROSE_ID, "data-domains": UMAMI_DOMAINS},
+        ),
+    ]
+
+
 # Simple global cache
 tools_cache: Dict = {}
 logger = logging.getLogger(__name__)
@@ -969,11 +1000,7 @@ async def get():
             Meta({"name": "twitter:title", "content": meta_title}),
             Meta({"name": "twitter:description", "content": meta_desc}),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
-            Script(
-                defer=True,
-                src="https://analytics.drose.io/script.js",
-                data_website_id="33e9b5a0-5fbf-474c-9d60-9bee34d577bd",
-            ),
+            *umami_scripts(),
         ),
         Body(
             Div(
@@ -1050,6 +1077,7 @@ async def get_tool_page(slug: str):
             Script(json.dumps(breadcrumbs), type="application/ld+json"),
             Script(json.dumps(product_schema), type="application/ld+json"),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
+            *umami_scripts(),
         ),
         Body(
             Div(
@@ -1137,6 +1165,7 @@ async def get_comparisons_hub():
             Meta({"property": "og:url", "content": f"{base_url}/comparisons"}),
             Script(json.dumps(breadcrumbs), type="application/ld+json"),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
+            *umami_scripts(),
         ),
         Body(
             Div(
@@ -1234,6 +1263,7 @@ async def get_comparison_page(slug: str):
             Script(json.dumps(breadcrumbs), type="application/ld+json"),
             Script(json.dumps(comparison_schema), type="application/ld+json"),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
+            *umami_scripts(),
         ),
         Body(
             Div(
@@ -1291,6 +1321,7 @@ async def get_category_page(category_slug: str):
             Meta({"property": "og:url", "content": f"{base_url}/category/{category_slug}"}),
             Script(json.dumps(breadcrumbs), type="application/ld+json"),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
+            *umami_scripts(),
         ),
         Body(
             Div(
