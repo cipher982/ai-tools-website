@@ -1009,8 +1009,9 @@ async def get_tool_page(slug: str):
         ), 404
 
     base_url = get_base_url()
-    meta_title = generate_meta_title(tool["name"], tool.get("category", "AI Tool"))
-    meta_desc = generate_meta_description(tool["name"], tool["description"])
+    pricing = tool.get("pricing")
+    meta_title = generate_meta_title(tool["name"], tool.get("category", "AI Tool"), pricing=pricing)
+    meta_desc = generate_meta_description(tool["name"], tool["description"], pricing=pricing)
 
     # Generate breadcrumbs
     breadcrumbs = generate_breadcrumb_list(

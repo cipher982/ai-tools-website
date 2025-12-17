@@ -165,20 +165,39 @@ def extract_domain_from_url(url: str) -> str:
         return ""
 
 
-def generate_meta_title(tool_name: str, category: str, max_length: int = 60) -> str:
-    """Generate SEO-optimized meta title."""
-    base_title = f"{tool_name} - AI {category} Tool Review & Guide"
+def generate_meta_title(tool_name: str, category: str, pricing: str | None = None, max_length: int = 60) -> str:
+    """Generate SEO-optimized meta title.
 
+    Prioritizes: tool name + pricing indicator + category
+    """
+    # Include pricing hint if available (users often search for "free" tools)
+    pricing_hint = ""
+    if pricing:
+        pricing_lower = pricing.lower()
+        # Check freemium first (contains "free" so must be checked before)
+        if "freemium" in pricing_lower:
+            pricing_hint = " - Free Tier"
+        elif pricing_lower == "free" or pricing_lower.startswith("free"):
+            pricing_hint = " (Free)"
+
+    # Try title with pricing hint
+    if pricing_hint:
+        title_with_pricing = f"{tool_name}{pricing_hint} | AI {category}"
+        if len(title_with_pricing) <= max_length:
+            return title_with_pricing
+
+    # Standard title without "Review & Guide" filler
+    base_title = f"{tool_name} | AI {category} Tool"
     if len(base_title) <= max_length:
         return base_title
 
-    # Shorter version if too long
-    short_title = f"{tool_name} - AI {category} Tool"
+    # Shorter version
+    short_title = f"{tool_name} - AI Tool"
     if len(short_title) <= max_length:
         return short_title
 
-    # Minimal version
-    return f"{tool_name} Review"
+    # Minimal - just the name
+    return tool_name[:max_length]
 
 
 def generate_comparison_meta(
@@ -228,13 +247,39 @@ def generate_comparison_meta(
     return title, desc
 
 
-def generate_meta_description(tool_name: str, description: str, max_length: int = 160) -> str:
-    """Generate SEO-optimized meta description."""
-    if not description:
-        return f"Complete guide to {tool_name}. Features, pricing, alternatives, and how to get started."
+def generate_meta_description(
+    tool_name: str,
+    description: str,
+    pricing: str | None = None,
+    max_length: int = 160,
+) -> str:
+    """Generate SEO-optimized meta description.
 
-    # Clean and truncate description
+    Prioritizes: what it is + key benefit + pricing/CTA
+    """
+    if not description:
+        return (
+            f"Learn about {tool_name}: features, pricing, and how to get started. "
+            f"Find alternatives and see if it's right for you."
+        )
+
+    # Clean description
     clean_desc = description.strip()
+
+    # Add pricing suffix if available and fits
+    pricing_suffix = ""
+    if pricing:
+        pricing_lower = pricing.lower()
+        if pricing_lower == "free":
+            pricing_suffix = " Free to use."
+        elif "freemium" in pricing_lower:
+            pricing_suffix = " Free tier available."
+
+    # Try full description with pricing
+    if pricing_suffix and len(clean_desc + pricing_suffix) <= max_length:
+        return clean_desc + pricing_suffix
+
+    # Fit description to max length
     if len(clean_desc) <= max_length:
         return clean_desc
 
@@ -242,16 +287,20 @@ def generate_meta_description(tool_name: str, description: str, max_length: int 
     sentences = clean_desc.split(". ")
     result = sentences[0]
 
-    # If first sentence is too long, hard truncate it
+    # If first sentence is too long, hard truncate
     if len(result) > max_length - 3:
-        result = result[: max_length - 3] + "..."
-        return result
+        return result[: max_length - 3] + "..."
 
     for sentence in sentences[1:]:
-        if len(result + ". " + sentence) <= max_length - 3:
-            result += ". " + sentence
+        potential = result + ". " + sentence
+        if len(potential) <= max_length - 3:
+            result = potential
         else:
             break
+
+    # Try adding pricing suffix to truncated result
+    if pricing_suffix and len(result + pricing_suffix) <= max_length:
+        return result + pricing_suffix
 
     if not result.endswith("."):
         result += "..."
