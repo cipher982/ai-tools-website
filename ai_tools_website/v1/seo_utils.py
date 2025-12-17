@@ -181,6 +181,53 @@ def generate_meta_title(tool_name: str, category: str, max_length: int = 60) -> 
     return f"{tool_name} Review"
 
 
+def generate_comparison_meta(
+    tool1_name: str,
+    tool2_name: str,
+    stored_title: str | None = None,
+    stored_desc: str | None = None,
+) -> tuple[str, str]:
+    """Generate SEO-optimized title and description for comparison pages.
+
+    Returns (title, description) tuple with action-oriented copy.
+    Ensures descriptions answer the searcher's question, not just list topics.
+    """
+    # Title: use stored if good, otherwise generate action-oriented one
+    if stored_title and len(stored_title) <= 60:
+        title = stored_title
+    else:
+        title = f"{tool1_name} vs {tool2_name}: Pricing & Features Compared"
+
+    # Description: need question-answering format for good CTR
+    question_hook = f"Which is better: {tool1_name} or {tool2_name}? "
+
+    if stored_desc and len(stored_desc) >= 80:
+        # Check if stored desc already answers the question
+        desc_lower = stored_desc.lower()
+        has_question_format = any(
+            phrase in desc_lower for phrase in ["which is", "what's the difference", "compare ", "better for", "vs"]
+        )
+        if has_question_format:
+            desc = stored_desc
+        else:
+            # Prepend question hook if space allows
+            combined = question_hook + stored_desc
+            if len(combined) <= 160:
+                desc = combined
+            else:
+                # Truncate stored desc to fit with hook
+                available = 160 - len(question_hook) - 3
+                desc = question_hook + stored_desc[:available] + "..."
+    else:
+        desc = (
+            f"{question_hook}"
+            f"Compare pricing, features, performance, and see when to use each. "
+            f"Updated comparison with pros and cons."
+        )
+
+    return title, desc
+
+
 def generate_meta_description(tool_name: str, description: str, max_length: int = 160) -> str:
     """Generate SEO-optimized meta description."""
     if not description:

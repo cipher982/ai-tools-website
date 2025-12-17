@@ -50,6 +50,7 @@ from ai_tools_website.v1.pipeline_analytics import render_sparkline
 from ai_tools_website.v1.pipeline_db import get_latest_pipeline_status
 from ai_tools_website.v1.seo_utils import generate_breadcrumb_list
 from ai_tools_website.v1.seo_utils import generate_category_slug
+from ai_tools_website.v1.seo_utils import generate_comparison_meta
 from ai_tools_website.v1.seo_utils import generate_meta_description
 from ai_tools_website.v1.seo_utils import generate_meta_title
 from ai_tools_website.v1.seo_utils import generate_product_schema
@@ -1171,9 +1172,11 @@ async def get_comparison_page(slug: str):
         ), 404
 
     base_url = get_base_url()
-    title = comparison.get("title", f"{tool1_name} vs {tool2_name}: Complete Comparison Guide")
-    meta_desc = comparison.get(
-        "meta_description", f"Compare {tool1_name} and {tool2_name}. Features, pricing, pros/cons analysis."
+    title, meta_desc = generate_comparison_meta(
+        tool1_name,
+        tool2_name,
+        stored_title=comparison.get("title"),
+        stored_desc=comparison.get("meta_description"),
     )
 
     # Generate breadcrumbs
