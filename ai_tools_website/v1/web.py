@@ -21,6 +21,7 @@ from fasthtml.common import Html
 from fasthtml.common import Img
 from fasthtml.common import Input
 from fasthtml.common import Li
+from fasthtml.common import Link
 from fasthtml.common import Meta
 from fasthtml.common import P
 from fasthtml.common import Response
@@ -32,6 +33,9 @@ from fasthtml.common import StyleX
 from fasthtml.common import Title
 from fasthtml.common import Ul
 from fasthtml.fastapp import fast_app
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import RedirectResponse
 
 from ai_tools_website.v1.cron_utils import calculate_next_run
 from ai_tools_website.v1.cron_utils import get_cron_schedules
@@ -71,6 +75,32 @@ def url(path: str) -> str:
     if not path.startswith("/"):
         path = f"/{path}"
     return f"{BASE_PATH}{path}"
+
+
+class TrailingSlashMiddleware(BaseHTTPMiddleware):
+    """Redirect trailing-slash URLs to non-trailing-slash with proper BASE_PATH and HTTPS.
+
+    Starlette's default redirect_slashes doesn't know about BASE_PATH when
+    behind a reverse proxy, causing redirects like /tools/foo/ -> /tools/foo
+    instead of /aitools/tools/foo/ -> /aitools/tools/foo.
+    """
+
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        # Skip root path and paths without trailing slash
+        if path != "/" and path.endswith("/"):
+            # Build proper redirect URL with BASE_PATH and force HTTPS
+            new_path = BASE_PATH + path.rstrip("/")
+            # Use the host from the request, but force https in production
+            scheme = "https" if request.headers.get("x-forwarded-proto") == "https" else request.url.scheme
+            # For production behind Cloudflare/Caddy, always use https
+            if os.getenv("PRODUCTION", "").lower() in ("true", "1"):
+                scheme = "https"
+            # Preserve query string if present
+            query = f"?{request.url.query}" if request.url.query else ""
+            redirect_url = f"{scheme}://{request.url.netloc}{new_path}{query}"
+            return RedirectResponse(url=redirect_url, status_code=308)
+        return await call_next(request)
 
 
 def get_tools_by_category() -> Dict:
@@ -231,6 +261,23 @@ def get_base_url() -> str:
     """Get base URL for the site"""
     # For subdirectory deployment, construct from domain + base path
     return os.getenv("SERVICE_URL_WEB", f"https://drose.io{BASE_PATH}")
+
+
+def get_canonical_url(path: str = "") -> str:
+    """Generate canonical URL for a page path.
+
+    Args:
+        path: The page path without base path (e.g., "tools/chatgpt" or "category/development")
+
+    Returns:
+        Full canonical URL (e.g., "https://drose.io/aitools/tools/chatgpt")
+    """
+    base = get_base_url().rstrip("/")
+    if not path or path == "/":
+        return base
+    # Ensure path doesn't have leading slash (we add it)
+    path = path.lstrip("/")
+    return f"{base}/{path}"
 
 
 def render_tool_sections(tool: dict) -> list:
@@ -543,7 +590,10 @@ def category_section(name, tools, use_internal_links=False):
 
 
 # App setup
-app, rt = fast_app(static_path=str(Path(__file__).parent / "static"))
+app, rt = fast_app(
+    static_path=str(Path(__file__).parent / "static"),
+    middleware=[Middleware(TrailingSlashMiddleware)],
+)
 
 
 status_styles = Style(
@@ -872,7 +922,8 @@ async def pipeline_status():
                     "content": "Real-time pipeline monitoring dashboard with performance metrics.",
                 }
             ),
-            Meta(name="robots", content="index,follow"),
+            Meta(name="robots", content="noindex,follow"),
+            Link(rel="canonical", href=get_canonical_url("pipeline-status")),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
             status_styles,
         ),
@@ -912,6 +963,7 @@ async def get():
                 }
             ),
             Meta({"name": "robots", "content": "index, follow"}),
+            Link(rel="canonical", href=get_canonical_url()),
             Meta({"property": "og:title", "content": "AI Tools Collection - Best AI Software & Applications"}),
             Meta(
                 {
@@ -1004,6 +1056,7 @@ async def get_tool_page(slug: str):
             Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
             Meta({"name": "description", "content": meta_desc}),
             Meta({"name": "robots", "content": "index, follow"}),
+            Link(rel="canonical", href=get_canonical_url(f"tools/{slug}")),
             Meta({"property": "og:title", "content": meta_title}),
             Meta({"property": "og:description", "content": meta_desc}),
             Meta({"property": "og:type", "content": "website"}),
@@ -1048,6 +1101,75 @@ async def get_tool_page(slug: str):
                     if related_tools
                     else None,
                     _class="tool-layout",
+                ),
+                _class="main-window",
+            )
+        ),
+    )
+
+
+@rt("/comparisons")
+async def get_comparisons_hub():
+    """Comparisons hub page listing all available tool comparisons"""
+    all_comparisons = get_all_comparisons()
+    base_url = get_base_url()
+
+    meta_title = "AI Tool Comparisons - Side-by-Side Analysis & Reviews"
+    meta_desc = (
+        "Compare popular AI tools side-by-side. Detailed comparisons of features, "
+        "pricing, pros and cons to help you choose the right AI solution."
+    )
+
+    # Generate breadcrumbs
+    breadcrumbs = generate_breadcrumb_list(
+        [{"name": "Home", "url": ""}, {"name": "Comparisons", "url": "comparisons"}],
+        base_url,
+    )
+
+    # Build comparison cards
+    comparison_cards = []
+    for comp in sorted(all_comparisons, key=lambda x: x.get("title", "")):
+        comparison_cards.append(
+            A(
+                {"href": url(f"/compare/{comp['slug']}"), "_class": "tool-card"},
+                H5(f"{comp['tool1_name']} vs {comp['tool2_name']}"),
+                P(comp.get("meta_description", f"Compare {comp['tool1_name']} and {comp['tool2_name']}")[:150] + "..."),
+            )
+        )
+
+    return Html(
+        Head(
+            Title(meta_title),
+            Meta({"charset": "utf-8"}),
+            Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
+            Meta({"name": "description", "content": meta_desc}),
+            Meta({"name": "robots", "content": "index, follow"}),
+            Link(rel="canonical", href=get_canonical_url("comparisons")),
+            Meta({"property": "og:title", "content": meta_title}),
+            Meta({"property": "og:description", "content": meta_desc}),
+            Meta({"property": "og:type", "content": "website"}),
+            Meta({"property": "og:url", "content": f"{base_url}/comparisons"}),
+            Script(json.dumps(breadcrumbs), type="application/ld+json"),
+            StyleX(str(Path(__file__).parent / "static/styles.css")),
+        ),
+        Body(
+            Div(
+                # Breadcrumb navigation
+                Div(A("Home", href=url("/")), " › ", Span("Comparisons"), _class="breadcrumbs"),
+                # Main content
+                H1("AI Tool Comparisons", _class="window-title"),
+                P(
+                    f"Explore {len(all_comparisons)} side-by-side comparisons of popular AI tools. "
+                    "Find detailed analysis to help you choose the right solution.",
+                    _class="intro",
+                ),
+                # Comparisons grid
+                Section(
+                    H2("All Comparisons"),
+                    Div(*comparison_cards, _class="tools-grid")
+                    if comparison_cards
+                    else P("No comparisons available yet."),
+                    _class="category",
                 ),
                 _class="main-window",
             )
@@ -1115,6 +1237,7 @@ async def get_comparison_page(slug: str):
             Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
             Meta({"name": "description", "content": meta_desc}),
             Meta({"name": "robots", "content": "index, follow"}),
+            Link(rel="canonical", href=get_canonical_url(f"compare/{slug}")),
             Meta({"property": "og:title", "content": title}),
             Meta({"property": "og:description", "content": meta_desc}),
             Meta({"property": "og:type", "content": "article"}),
@@ -1173,6 +1296,7 @@ async def get_category_page(category_slug: str):
             Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
             Meta({"name": "description", "content": meta_desc}),
             Meta({"name": "robots", "content": "index, follow"}),
+            Link(rel="canonical", href=get_canonical_url(f"category/{category_slug}")),
             Meta({"property": "og:title", "content": meta_title}),
             Meta({"property": "og:description", "content": meta_desc}),
             Meta({"property": "og:type", "content": "website"}),

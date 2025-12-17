@@ -108,7 +108,7 @@ def _build_static_entries(base_url: str) -> List[Dict[str, str]]:
     lastmod = _now_iso()[:10]
     return [
         {"loc": base_url, "lastmod": lastmod},
-        {"loc": f"{base_url}/pipeline-status", "lastmod": lastmod},
+        {"loc": f"{base_url}/comparisons", "lastmod": lastmod},
     ]
 
 
