@@ -933,20 +933,23 @@ async def get():
     # Trigger background refresh
     asyncio.create_task(refresh_tools_background())
 
+    # Dynamic counts for meta tags
+    tool_count = sum(len(tools) for tools in tools_by_category.values())
+    category_count = len(tools_by_category)
+
+    meta_title = f"{tool_count}+ AI Tools Directory - Find the Right AI Tool for Any Task"
+    meta_desc = (
+        f"Browse {tool_count}+ AI tools across {category_count} categories. "
+        "Compare alternatives, check pricing, and find the best tool for coding, "
+        "image generation, voice cloning, and more."
+    )
+
     return Html(
         Head(
-            Title("AI Tools Collection - Best AI Software & Applications"),
+            Title(meta_title),
             Meta({"charset": "utf-8"}),
             Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
-            Meta(
-                {
-                    "name": "description",
-                    "content": (
-                        "Discover the best AI tools for productivity, content creation, development, and more. "
-                        "A curated collection of artificial intelligence tools gathered by AI agents."
-                    ),
-                }
-            ),
+            Meta({"name": "description", "content": meta_desc}),
             Meta(
                 {
                     "name": "keywords",
@@ -958,25 +961,12 @@ async def get():
             ),
             Meta({"name": "robots", "content": "index, follow"}),
             Link(rel="canonical", href=get_canonical_url()),
-            Meta({"property": "og:title", "content": "AI Tools Collection - Best AI Software & Applications"}),
-            Meta(
-                {
-                    "property": "og:description",
-                    "content": (
-                        "Discover the best AI tools for productivity, content creation, development, and more. "
-                        "A curated collection of artificial intelligence tools."
-                    ),
-                }
-            ),
+            Meta({"property": "og:title", "content": meta_title}),
+            Meta({"property": "og:description", "content": meta_desc}),
             Meta({"property": "og:type", "content": "website"}),
             Meta({"name": "twitter:card", "content": "summary_large_image"}),
-            Meta({"name": "twitter:title", "content": "AI Tools Collection - Best AI Software & Applications"}),
-            Meta(
-                {
-                    "name": "twitter:description",
-                    "content": "Discover the best AI tools for productivity, content creation, development, and more.",
-                }
-            ),
+            Meta({"name": "twitter:title", "content": meta_title}),
+            Meta({"name": "twitter:description", "content": meta_desc}),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
             Script(
                 defer=True,
@@ -997,8 +987,8 @@ async def get():
                     ),
                     _class="github-corner",
                 ),
-                H1("AI Tools Collection", _class="window-title"),
-                P("A curated collection of AI tools, gathered by AI agents.", _class="intro"),
+                H1("AI Tools Directory", _class="window-title"),
+                P("Find the right AI tool for any task. Browse, compare, and discover.", _class="intro"),
                 Input({"type": "search", "id": "search", "placeholder": "Search tools...", "_id": "search"}),
                 *sections,
                 _class="main-window",

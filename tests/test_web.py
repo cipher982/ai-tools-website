@@ -78,7 +78,7 @@ class TestRoutes:
         """Homepage should return 200."""
         response = client.get("/")
         assert response.status_code == 200
-        assert "AI Tools Collection" in response.text
+        assert "AI Tools Directory" in response.text
 
     def test_homepage_has_canonical_link(self, client):
         """Homepage should have canonical link tag."""
