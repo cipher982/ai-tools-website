@@ -412,13 +412,36 @@ pre code {
 
 /* Enhanced content indicators */
 .data-freshness {
-    margin-top: var(--spacing-lg);
-    font-size: 13px;
-    color: var(--muted);
-    padding: 10px 12px;
+    margin-top: var(--spacing-xl);
+    padding: var(--spacing-md) var(--spacing-lg);
     background: var(--surface-2);
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    color: var(--muted);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+}
+
+.evidence-links {
+    display: flex;
+    gap: var(--spacing-md);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.evidence-links a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.evidence-links a:hover {
+    text-decoration: underline;
 }
 
 /* Mobile responsiveness */

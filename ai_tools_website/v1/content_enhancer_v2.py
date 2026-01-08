@@ -52,8 +52,8 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_MAX_PER_RUN = int(os.getenv("CONTENT_ENHANCER_V2_MAX_PER_RUN", "50"))
-DEFAULT_TIER = os.getenv("CONTENT_ENHANCER_V2_TIER", "all")  # tier1, tier2, tier3, or all
+DEFAULT_MAX_PER_RUN = int(os.getenv("CONTENT_ENHANCER_MAX_PER_RUN", "50"))
+DEFAULT_TIER = os.getenv("CONTENT_ENHANCER_TIER", "all")  # tier1, tier2, tier3, or all
 
 
 def _strip_json_content(value: str) -> str:
@@ -401,7 +401,15 @@ Generate comprehensive content following the schema provided."""
     # Inject external data directly (not generated)
     if external_data.get("github_stats"):
         gh = external_data["github_stats"]
+        full_name = gh.get("full_name")
+        if full_name:
+            github_url = f"https://github.com/{full_name}"
+        else:
+            owner = gh.get("owner")
+            repo = gh.get("repo")
+            github_url = f"https://github.com/{owner}/{repo}" if owner and repo else None
         parsed["github_stats"] = {
+            "url": github_url,
             "stars": gh.get("stars"),
             "forks": gh.get("forks"),
             "open_issues": gh.get("open_issues"),
@@ -414,7 +422,17 @@ Generate comprehensive content following the schema provided."""
 
     if external_data.get("huggingface_stats"):
         hf = external_data["huggingface_stats"]
+        hf_id = hf.get("id")
+        hf_type = hf.get("type")
+        hf_url = None
+        if hf_id and hf_type == "space":
+            hf_url = f"https://huggingface.co/spaces/{hf_id}"
+        elif hf_id and hf_type == "dataset":
+            hf_url = f"https://huggingface.co/datasets/{hf_id}"
+        elif hf_id:
+            hf_url = f"https://huggingface.co/{hf_id}"
         parsed["huggingface_stats"] = {
+            "url": hf_url,
             "downloads": hf.get("downloads"),
             "likes": hf.get("likes"),
             "pipeline_tag": hf.get("pipeline_tag"),
@@ -424,7 +442,10 @@ Generate comprehensive content following the schema provided."""
 
     if external_data.get("pypi_stats"):
         pypi = external_data["pypi_stats"]
+        package_name = pypi.get("name")
+        package_url = pypi.get("package_url") or (f"https://pypi.org/project/{package_name}/" if package_name else None)
         parsed["pypi_stats"] = {
+            "package_url": package_url,
             "version": pypi.get("version"),
             "downloads": pypi.get("downloads"),
             "requires_python": pypi.get("requires_python"),
@@ -432,7 +453,12 @@ Generate comprehensive content following the schema provided."""
 
     if external_data.get("npm_stats"):
         npm = external_data["npm_stats"]
+        package_name = npm.get("name")
+        package_url = npm.get("package_url") or (
+            f"https://www.npmjs.com/package/{package_name}" if package_name else None
+        )
         parsed["npm_stats"] = {
+            "package_url": package_url,
             "version": npm.get("version"),
             "downloads": npm.get("downloads"),
         }

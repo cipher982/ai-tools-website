@@ -573,21 +573,51 @@ def render_tool_sections_v2(tool: dict) -> list:
         if stats_items:
             blocks.append(Ul(*stats_items))
 
-    # === Data freshness indicator ===
+    # === Data freshness & Evidence section ===
     generated_at = enhanced.get("generated_at")
     data_sources = enhanced.get("data_sources", [])
-    if generated_at or data_sources:
-        freshness_text = []
+
+    evidence_links = []
+
+    # GitHub link
+    gh_stats = enhanced.get("github_stats") or {}
+    if gh_stats.get("url"):
+        evidence_links.append(Li(A("GitHub", href=gh_stats["url"], target="_blank", rel="noopener noreferrer")))
+
+    # HuggingFace link
+    hf_stats = enhanced.get("huggingface_stats") or {}
+    if hf_stats.get("url"):
+        evidence_links.append(Li(A("HuggingFace", href=hf_stats["url"], target="_blank", rel="noopener noreferrer")))
+
+    # PyPI link
+    pypi_stats = enhanced.get("pypi_stats") or {}
+    if pypi_stats.get("package_url"):
+        evidence_links.append(Li(A("PyPI", href=pypi_stats["package_url"], target="_blank", rel="noopener noreferrer")))
+
+    # npm link
+    npm_stats = enhanced.get("npm_stats") or {}
+    if npm_stats.get("package_url"):
+        evidence_links.append(Li(A("npm", href=npm_stats["package_url"], target="_blank", rel="noopener noreferrer")))
+
+    if generated_at or evidence_links:
+        timestamp_text = "Content pending verification"
         if generated_at:
             try:
                 dt = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
-                freshness_text.append(f"Content updated: {dt.strftime('%Y-%m-%d')}")
+                timestamp_text = f"Verified: {dt.strftime('%Y-%m-%d')}"
             except ValueError:
                 pass
-        if data_sources:
-            freshness_text.append(f"Data sources: {', '.join(data_sources)}")
-        if freshness_text:
-            blocks.append(Div(P(" | ".join(freshness_text)), cls="data-freshness"))
+
+        # Combine into the freshness bar
+        blocks.append(
+            Div(
+                Span(timestamp_text),
+                Ul(*evidence_links, cls="evidence-links")
+                if evidence_links
+                else Span(f"Sources: {', '.join(data_sources)}" if data_sources else ""),
+                cls="data-freshness",
+            )
+        )
 
     return blocks
 
