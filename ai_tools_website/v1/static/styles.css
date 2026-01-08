@@ -1,305 +1,342 @@
+/* Modern baseline theme (keeps existing class names + structure). */
+
 :root {
-    /* Windows 98/2000 Color Palette */
-    --win98-face: #C3C3C3;
-    --win98-shadow: #818181;
-    --win98-highlight: #FDFFFF;
-    --win98-accent: #000080;
-    --win98-text: #000000;
-    --win98-text-light: #FFFFFF;
-    --win98-border: #808080;
-    --win98-dark-shadow: #404040;
-    --win98-button-face: #C0C0C0;
-    --win98-active-title: #0A246A;
-    --win98-inactive-title: #808080;
-    --taskman-bg: #000000;
-    --taskman-green: #00FF00;
-    --win98-desktop: #008080;
-    
-    /* Spacing System */
-    --spacing-xs: 2px;
-    --spacing-sm: 4px;
-    --spacing-md: 8px;
-    --spacing-lg: 16px;
-    
-    /* Beveled Border Patterns */
-    --border-raised: 2px solid;
-    --border-raised-color: var(--win98-highlight) var(--win98-shadow) var(--win98-shadow) var(--win98-highlight);
-    --border-sunken: 2px solid;
-    --border-sunken-color: var(--win98-shadow) var(--win98-highlight) var(--win98-highlight) var(--win98-shadow);
-    --border-button: 1px solid;
-    --border-button-color: var(--win98-highlight) var(--win98-shadow) var(--win98-shadow) var(--win98-highlight);
-    --border-button-pressed: var(--win98-shadow) var(--win98-highlight) var(--win98-highlight) var(--win98-shadow);
+    color-scheme: light;
+
+    --bg: #0b1020;
+    --surface: #0f172a;
+    --surface-2: #111c33;
+    --text: #e6eaf2;
+    --muted: #aab3c5;
+    --border: rgba(255, 255, 255, 0.10);
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+
+    --accent: #7c3aed;
+    --accent-2: #22c55e;
+    --danger: #ef4444;
+
+    --radius-sm: 10px;
+    --radius-md: 14px;
+
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 18px;
+    --spacing-xl: 28px;
+
+    --font-sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+        "Segoe UI Emoji";
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-/* Pixel-perfect rendering for authentic retro feel */
-html {
-    image-rendering: pixelated;
-    -webkit-font-smoothing: none;
-    font-smooth: never;
-    -moz-osx-font-smoothing: unset;
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg: #f5f6fa;
+        --surface: #ffffff;
+        --surface-2: #f7f8fc;
+        --text: #111827;
+        --muted: #4b5563;
+        --border: rgba(17, 24, 39, 0.12);
+        --shadow: 0 18px 50px rgba(17, 24, 39, 0.10);
+    }
 }
 
-/* Base Typography */
-html, body {
+html,
+body {
     margin: 0;
     padding: 0;
-    height: 100%;
 }
 
 body {
-    background: var(--win98-desktop);
-    padding: var(--spacing-lg) var(--spacing-md);
+    background: radial-gradient(1200px 600px at 20% -10%, rgba(124, 58, 237, 0.25), transparent 60%),
+        radial-gradient(900px 500px at 90% 0%, rgba(34, 197, 94, 0.18), transparent 55%),
+        var(--bg);
     min-height: 100vh;
-    color: var(--win98-text);
-    font-family: "MS Sans Serif", "Tahoma", system-ui, sans-serif;
-    font-size: 11px;
-    box-sizing: border-box;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    padding: var(--spacing-xl) var(--spacing-lg);
 }
 
-*, *::before, *::after {
-    box-sizing: inherit;
+a {
+    color: inherit;
 }
 
 .main-window {
-    background: var(--win98-face);
-    max-width: 1200px;
+    max-width: 1160px;
     margin: 0 auto;
-    padding: var(--spacing-md);
-    border: var(--border-raised);
-    border-color: var(--border-raised-color);
-    box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+    padding: var(--spacing-xl);
     position: relative;
 }
 
 .window-title {
-    color: var(--win98-text);
     margin: 0 0 var(--spacing-lg);
-    font-size: 16px;
-    font-weight: bold;
-    text-align: center;
+    font-size: 34px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
 }
 
-/* Fallback for any h1 that might still appear due to caching */
 h1 {
-    color: var(--win98-text) !important;
-    margin: 0 0 var(--spacing-lg) !important;
-    font-size: 16px !important;
-    font-weight: bold !important;
-    text-align: center !important;
+    margin: 0 0 var(--spacing-lg);
+    font-size: 34px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+}
+
+h2 {
+    font-size: 22px;
+    margin: var(--spacing-xl) 0 var(--spacing-sm);
+}
+
+h3 {
+    font-size: 18px;
+    margin: var(--spacing-lg) 0 var(--spacing-sm);
+}
+
+h4 {
+    font-size: 16px;
+    margin: var(--spacing-md) 0 var(--spacing-sm);
+}
+
+p {
+    margin: 0 0 var(--spacing-md);
+    color: var(--text);
+}
+
+ul {
+    margin: 0 0 var(--spacing-md);
+    padding-left: 22px;
+}
+
+li {
+    margin: 0 0 var(--spacing-xs);
+}
+
+code {
+    font-family: var(--font-mono);
+    font-size: 0.95em;
+}
+
+pre {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-md);
+    overflow: auto;
+    margin: 0 0 var(--spacing-md);
+}
+
+pre code {
+    display: block;
+    white-space: pre;
 }
 
 /* Utility Classes */
 .window {
-    background: var(--win98-face);
-    border: var(--border-raised);
-    border-color: var(--border-raised-color);
-    padding: var(--spacing-md);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
 }
 
 .button {
-    background: var(--win98-button-face);
-    border: var(--border-button);
-    border-color: var(--border-button-color);
-    padding: var(--spacing-xs) var(--spacing-md);
+    background: rgba(124, 58, 237, 0.12);
+    color: var(--text);
+    border: 1px solid rgba(124, 58, 237, 0.35);
+    border-radius: 10px;
+    padding: 10px 14px;
     font: inherit;
-    color: var(--win98-text);
     text-decoration: none;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     cursor: pointer;
 }
 
 .button:hover {
-    border-color: var(--border-button-pressed);
-    background: var(--win98-face);
-}
-
-.button:active {
-    border-color: var(--border-button-pressed);
-    background: var(--win98-shadow);
+    background: rgba(124, 58, 237, 0.18);
+    border-color: rgba(124, 58, 237, 0.5);
 }
 
 .title-bar {
-    background: linear-gradient(90deg, var(--win98-active-title) 0%, var(--win98-accent) 100%);
-    color: var(--win98-text-light);
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-weight: bold;
-    border: 1px solid var(--win98-border);
-    margin: 0 0 var(--spacing-md);
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+    font-weight: 600;
 }
 
 .input-sunken {
-    border: var(--border-sunken);
-    border-color: var(--border-sunken-color);
-    background: var(--win98-text-light);
-    color: var(--win98-text);
-    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    padding: 10px 12px;
     font: inherit;
 }
 
-#search:focus {
-    outline: none;
-    border-color: var(--win98-dark-shadow) var(--win98-highlight) var(--win98-highlight) var(--win98-dark-shadow);
-}
-
-#search::placeholder {
-    color: var(--win98-shadow);
-}
-
 /* Layout */
-.two-col {
-    display: table;
-    width: 100%;
-    border-spacing: var(--spacing-md) 0;
+.two-col,
+.three-col {
+    display: grid;
+    gap: var(--spacing-lg);
 }
 
-.two-col > * {
-    display: table-cell;
-    width: 50%;
-    vertical-align: top;
+.two-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .three-col {
-    display: table;
-    width: 100%;
-    border-spacing: var(--spacing-md) 0;
-}
-
-.three-col > * {
-    display: table-cell;
-    width: 33.333%;
-    vertical-align: top;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 /* Component Styles */
 .intro {
-    margin-bottom: var(--spacing-lg);
-    padding: var(--spacing-md);
-    background: var(--win98-face);
-    border: var(--border-raised);
-    border-color: var(--border-raised-color);
-    color: var(--win98-text);
+    margin-bottom: var(--spacing-xl);
+    padding: var(--spacing-lg);
+    background: linear-gradient(180deg, rgba(124, 58, 237, 0.10), transparent 70%), var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text);
 }
 
 .tools-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
 }
 
 .tool-card {
-    background: var(--win98-face);
-    padding: var(--spacing-md);
-    border: var(--border-raised);
-    border-color: var(--border-raised-color);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
     text-decoration: none;
-    color: inherit;
     display: block;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
 }
 
 .tool-card:hover {
-    border-color: var(--border-sunken-color);
-    background: var(--win98-button-face);
+    transform: translateY(-2px);
+    border-color: rgba(124, 58, 237, 0.5);
+    background: var(--surface-2);
     text-decoration: none;
 }
 
 .tool-card h5 {
-    margin: 0 0 var(--spacing-sm);
-    font-weight: bold;
-    color: var(--win98-text);
+    margin: 0 0 var(--spacing-xs);
+    font-size: 16px;
+    font-weight: 650;
 }
 
 .tool-card p {
-    margin: 0 0 var(--spacing-md);
-    line-height: 1.3;
-    color: var(--win98-text);
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.35;
 }
 
-
 .category {
-    background: var(--win98-face);
-    border: var(--border-raised);
-    border-color: var(--border-raised-color);
-    padding: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
 }
 
 .category h2 {
-    background: linear-gradient(90deg, var(--win98-active-title) 0%, var(--win98-accent) 100%);
-    color: var(--win98-text-light);
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-weight: bold;
-    border: 1px solid var(--win98-border);
     margin: 0 0 var(--spacing-md);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
+    font-size: 22px;
+}
+
+.category h2 a {
+    color: var(--text);
+    text-decoration: none;
+}
+
+.category h2 a:hover {
+    text-decoration: underline;
+}
+
+.category p {
+    margin: 0 0 var(--spacing-md);
+    color: var(--muted);
 }
 
 .count {
-    background: var(--win98-button-face);
-    border: var(--border-button);
-    border-color: var(--border-button-color);
-    padding: var(--spacing-xs) var(--spacing-md);
-    font: inherit;
-    color: var(--win98-text);
-    text-decoration: none;
-    display: inline-block;
-    cursor: pointer;
-    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(124, 58, 237, 0.10);
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 600;
 }
 
 #search {
-    border: var(--border-sunken);
-    border-color: var(--border-sunken-color);
-    background: var(--taskman-bg);
-    color: var(--taskman-green);
-    padding: var(--spacing-sm) var(--spacing-md);
+    width: 100%;
+    padding: 12px 14px;
     font: inherit;
-    width: calc(100% - var(--spacing-lg));
-    margin-bottom: var(--spacing-lg);
-    border-radius: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    margin-bottom: var(--spacing-xl);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+#search:focus {
+    outline: none;
+    border-color: rgba(124, 58, 237, 0.6);
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.14);
+}
+
+#search::placeholder {
+    color: rgba(170, 179, 197, 0.8);
 }
 
 .github-corner {
     position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
-    background: var(--win98-button-face);
-    border: var(--border-raised);
-    border-color: var(--border-raised-color);
-    padding: var(--spacing-sm);
+    top: 18px;
+    right: 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.35);
+    padding: 10px;
+    backdrop-filter: blur(6px);
 }
 
 .github-corner:hover {
-    border-color: var(--border-sunken-color);
-    background: var(--win98-face);
+    border-color: rgba(124, 58, 237, 0.5);
 }
 
 .github-corner img {
-    width: 16px;
-    height: 16px;
-    image-rendering: pixelated;
-    opacity: 1;
+    width: 18px;
+    height: 18px;
+    opacity: 0.95;
 }
 
 /* SEO Pages Styling */
 .breadcrumbs {
-    font-size: 11px;
-    color: var(--win98-text);
+    font-size: 14px;
+    color: var(--muted);
     margin-bottom: var(--spacing-lg);
-    padding: var(--spacing-sm);
-    background: var(--win98-face);
-    border: var(--border-sunken);
-    border-color: var(--border-sunken-color);
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
 }
 
 .breadcrumbs a {
-    color: var(--win98-accent);
+    color: var(--text);
     text-decoration: none;
 }
 
@@ -307,70 +344,84 @@ h1 {
     text-decoration: underline;
 }
 
-.tool-title, .category-title {
-    font-size: 18px;
-    font-weight: bold;
+.tool-title,
+.category-title {
+    font-size: 30px;
+    font-weight: 700;
     margin-bottom: var(--spacing-lg);
-    color: var(--win98-text);
+    color: var(--text);
 }
 
 .tool-layout {
     display: grid;
-    grid-template-columns: 1fr 250px;
+    grid-template-columns: 1fr 280px;
     gap: var(--spacing-lg);
     margin-top: var(--spacing-lg);
 }
 
 .tool-content {
-    background: var(--win98-face);
-    border: var(--border-sunken);
-    border-color: var(--border-sunken-color);
-    padding: var(--spacing-lg);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xl);
 }
 
 .sidebar {
-    background: var(--win98-face);
-    border: var(--border-sunken);
-    border-color: var(--border-sunken-color);
-    padding: var(--spacing-md);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
     height: fit-content;
 }
 
 .related-tools {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-md);
 }
 
 .related-tools .tool-card {
-    font-size: 10px;
-    padding: var(--spacing-sm);
+    font-size: 14px;
+    padding: var(--spacing-md);
 }
 
 .cta-button {
-    background: var(--win98-button-face);
-    border: var(--border-button);
-    border-color: var(--border-button-color);
-    padding: var(--spacing-md) var(--spacing-lg);
-    color: var(--win98-text);
+    background: linear-gradient(180deg, rgba(124, 58, 237, 0.95), rgba(124, 58, 237, 0.75));
+    border: 1px solid rgba(124, 58, 237, 0.75);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: #ffffff;
     text-decoration: none;
-    font-weight: bold;
-    display: inline-block;
+    font-weight: 650;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-top: var(--spacing-lg);
 }
 
 .cta-button:hover {
-    border-color: var(--border-button-pressed);
-    background: var(--win98-face);
+    border-color: rgba(124, 58, 237, 0.95);
+    filter: brightness(1.05);
 }
 
 .category-intro {
     margin-bottom: var(--spacing-lg);
-    font-size: 12px;
-    color: var(--win98-text);
+    font-size: 16px;
+    color: var(--muted);
 }
 
-/* Mobile responsiveness for SEO pages */
+/* Enhanced content indicators */
+.data-freshness {
+    margin-top: var(--spacing-lg);
+    font-size: 13px;
+    color: var(--muted);
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+/* Mobile responsiveness */
 @media (max-width: 768px) {
     .tool-layout {
         grid-template-columns: 1fr;
@@ -378,5 +429,28 @@ h1 {
 
     .sidebar {
         order: -1;
+    }
+}
+
+@media (max-width: 900px) {
+    body {
+        padding: var(--spacing-lg);
+    }
+
+    .main-window {
+        padding: var(--spacing-lg);
+    }
+
+    .window-title,
+    h1 {
+        font-size: 28px;
+    }
+
+    .two-col {
+        grid-template-columns: 1fr;
+    }
+
+    .three-col {
+        grid-template-columns: 1fr;
     }
 }

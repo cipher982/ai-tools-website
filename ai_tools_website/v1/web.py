@@ -12,9 +12,11 @@ from dotenv import load_dotenv
 from fasthtml.common import H1
 from fasthtml.common import H2
 from fasthtml.common import H3
+from fasthtml.common import H4
 from fasthtml.common import H5
 from fasthtml.common import A
 from fasthtml.common import Body
+from fasthtml.common import Code
 from fasthtml.common import Div
 from fasthtml.common import Head
 from fasthtml.common import Html
@@ -24,10 +26,12 @@ from fasthtml.common import Li
 from fasthtml.common import Link
 from fasthtml.common import Meta
 from fasthtml.common import P
+from fasthtml.common import Pre
 from fasthtml.common import Response
 from fasthtml.common import Script
 from fasthtml.common import Section
 from fasthtml.common import Span
+from fasthtml.common import Strong
 from fasthtml.common import Style
 from fasthtml.common import StyleX
 from fasthtml.common import Title
@@ -307,7 +311,15 @@ def get_canonical_url(path: str = "") -> str:
 
 
 def render_tool_sections(tool: dict) -> list:
-    """Create enhanced content blocks for a tool detail page."""
+    """Create enhanced content blocks for a tool detail page.
+
+    Uses V2 content if available, otherwise falls back to V1.
+    """
+    # Check for V2 content first
+    if tool.get("enhanced_content_v2"):
+        return render_tool_sections_v2(tool)
+
+    # Fall back to V1 content
     enhanced = tool.get("enhanced_content") or {}
     blocks = []
 
@@ -349,6 +361,244 @@ def render_tool_sections(tool: dict) -> list:
         blocks.append(Ul(*[Li(item) for item in limitation_items]))
 
     return blocks
+
+
+def render_tool_sections_v2(tool: dict) -> list:
+    """Create variable content blocks based on enhanced_content_v2 structure.
+
+    V2 content has:
+    - Variable sections based on tool type
+    - Real metrics from external APIs (GitHub, HuggingFace, etc.)
+    - Sections only rendered when data is available
+    """
+    enhanced = tool.get("enhanced_content_v2") or {}
+    blocks = []
+
+    # Add noindex meta hint if tier is noindex (handled in page wrapper)
+    # This is informational - actual meta tag added in tool_detail_page
+
+    # === Overview Section (always present) ===
+    overview = enhanced.get("overview", {})
+    if isinstance(overview, dict) and overview.get("body"):
+        blocks.append(H2("Overview"))
+        blocks.append(P(overview["body"]))
+    elif isinstance(overview, str) and overview:
+        blocks.append(H2("Overview"))
+        blocks.append(P(overview))
+    else:
+        # Fallback to tool description
+        desc = tool.get("description", "")
+        if desc:
+            blocks.append(H2("Overview"))
+            blocks.append(P(desc))
+
+    # === GitHub Stats Section (for open source tools) ===
+    github_stats = enhanced.get("github_stats")
+    if github_stats and github_stats.get("stars"):
+        blocks.append(H3("GitHub Statistics"))
+        stats_items = []
+        if github_stats.get("stars"):
+            stats_items.append(Li(Strong("Stars: "), f"{github_stats['stars']:,}"))
+        if github_stats.get("forks"):
+            stats_items.append(Li(Strong("Forks: "), f"{github_stats['forks']:,}"))
+        if github_stats.get("contributors"):
+            stats_items.append(Li(Strong("Contributors: "), str(github_stats["contributors"])))
+        if github_stats.get("license"):
+            stats_items.append(Li(Strong("License: "), github_stats["license"]))
+        if github_stats.get("language"):
+            stats_items.append(Li(Strong("Primary Language: "), github_stats["language"]))
+        if github_stats.get("last_commit"):
+            stats_items.append(Li(Strong("Last Updated: "), github_stats["last_commit"]))
+        if github_stats.get("latest_release"):
+            stats_items.append(Li(Strong("Latest Release: "), github_stats["latest_release"]))
+        if stats_items:
+            blocks.append(Ul(*stats_items))
+
+        # GitHub analysis text if available
+        github_analysis = enhanced.get("github_analysis", {})
+        if isinstance(github_analysis, dict) and github_analysis.get("body"):
+            blocks.append(P(github_analysis["body"]))
+
+    # === HuggingFace Stats Section (for ML models) ===
+    hf_stats = enhanced.get("huggingface_stats")
+    if hf_stats and (hf_stats.get("downloads") or hf_stats.get("likes")):
+        blocks.append(H3("Model Statistics"))
+        stats_items = []
+        if hf_stats.get("downloads"):
+            stats_items.append(Li(Strong("Downloads: "), f"{hf_stats['downloads']:,}"))
+        if hf_stats.get("likes"):
+            stats_items.append(Li(Strong("Likes: "), str(hf_stats["likes"])))
+        if hf_stats.get("pipeline_tag"):
+            stats_items.append(Li(Strong("Pipeline: "), hf_stats["pipeline_tag"]))
+        if hf_stats.get("parameters"):
+            stats_items.append(Li(Strong("Parameters: "), hf_stats["parameters"]))
+        if stats_items:
+            blocks.append(Ul(*stats_items))
+
+        # Model card details
+        model_card = hf_stats.get("model_card", {})
+        if model_card:
+            if model_card.get("license"):
+                blocks.append(P(Strong("License: "), model_card["license"]))
+
+    # === Model Details Section (for ML models) ===
+    model_details = enhanced.get("model_details", {})
+    if isinstance(model_details, dict) and model_details.get("body"):
+        blocks.append(H3("Model Details"))
+        blocks.append(P(model_details["body"]))
+
+    # === Installation Section ===
+    installation = enhanced.get("installation", {})
+    if installation and installation.get("commands"):
+        blocks.append(H3("Installation"))
+        pkg_manager = installation.get("package_manager", "")
+        if pkg_manager:
+            blocks.append(P(f"Install via {pkg_manager}:"))
+        for cmd in installation["commands"]:
+            blocks.append(Pre(Code(cmd)))
+
+    # === Key Features Section ===
+    features = enhanced.get("key_features", {})
+    if isinstance(features, dict):
+        feature_items = features.get("items") or []
+    elif isinstance(features, list):
+        feature_items = features
+    else:
+        feature_items = []
+    if feature_items:
+        blocks.append(H3("Key Features"))
+        blocks.append(Ul(*[Li(item) for item in feature_items]))
+
+    # === Use Cases Section ===
+    use_cases = enhanced.get("use_cases", {})
+    if isinstance(use_cases, dict):
+        use_case_items = use_cases.get("items") or []
+    elif isinstance(use_cases, list):
+        use_case_items = use_cases
+    else:
+        use_case_items = []
+    if use_case_items:
+        blocks.append(H3("Use Cases"))
+        blocks.append(Ul(*[Li(item) for item in use_case_items]))
+
+    # === Code Examples Section ===
+    code_example = enhanced.get("code_example", {})
+    if code_example and code_example.get("code"):
+        blocks.append(H3("Example Usage"))
+        lang = code_example.get("language", "python")
+        blocks.append(P(f"Example ({lang}):"))
+        blocks.append(Pre(Code(code_example["code"])))
+
+    code_examples = enhanced.get("code_examples", {})
+    if code_examples:
+        blocks.append(H3("Code Examples"))
+        for lang, code in code_examples.items():
+            if code:
+                blocks.append(H4(lang.capitalize()))
+                blocks.append(Pre(Code(code)))
+
+    # === API Overview Section ===
+    api_overview = enhanced.get("api_overview", {})
+    if api_overview:
+        blocks.append(H3("API Overview"))
+        api_items = []
+        if api_overview.get("auth_method"):
+            api_items.append(Li(Strong("Authentication: "), api_overview["auth_method"]))
+        if api_overview.get("base_url"):
+            api_items.append(Li(Strong("Base URL: "), Code(api_overview["base_url"])))
+        if api_overview.get("rate_limits"):
+            api_items.append(Li(Strong("Rate Limits: "), api_overview["rate_limits"]))
+        if api_items:
+            blocks.append(Ul(*api_items))
+
+    # === Pricing Section ===
+    pricing = enhanced.get("pricing", {})
+    if pricing:
+        # Check if it's detailed tier pricing or summary
+        if pricing.get("tiers"):
+            blocks.append(H3("Pricing"))
+            for tier_info in pricing["tiers"]:
+                tier_name = tier_info.get("name", "Plan")
+                price = tier_info.get("price", "")
+                blocks.append(H4(f"{tier_name}: {price}"))
+                tier_features = tier_info.get("features", [])
+                if tier_features:
+                    blocks.append(Ul(*[Li(f) for f in tier_features]))
+            if pricing.get("notes"):
+                blocks.append(P(pricing["notes"]))
+        elif pricing.get("summary"):
+            blocks.append(H3("Pricing"))
+            blocks.append(P(pricing["summary"]))
+
+    # === Benchmarks Section ===
+    benchmarks = enhanced.get("benchmarks", {})
+    if benchmarks and benchmarks.get("metrics"):
+        blocks.append(H3("Benchmarks"))
+        for metric in benchmarks["metrics"]:
+            metric_name = metric.get("name", "")
+            metric_value = metric.get("value", "")
+            metric_source = metric.get("source", "")
+            if metric_name and metric_value:
+                text = f"{metric_name}: {metric_value}"
+                if metric_source:
+                    text += f" (Source: {metric_source})"
+                blocks.append(P(text))
+
+    # === Alternatives Section ===
+    alternatives = enhanced.get("alternatives", {})
+    if alternatives and alternatives.get("tools"):
+        blocks.append(H3("Alternatives"))
+        blocks.append(Ul(*[Li(alt) for alt in alternatives["tools"]]))
+        if alternatives.get("comparison_notes"):
+            blocks.append(P(alternatives["comparison_notes"]))
+
+    # === Community Section ===
+    community = enhanced.get("community", {})
+    if isinstance(community, dict) and community.get("summary"):
+        blocks.append(H3("Community"))
+        blocks.append(P(community["summary"]))
+
+    # === PyPI Stats (if available) ===
+    pypi_stats = enhanced.get("pypi_stats")
+    if pypi_stats and pypi_stats.get("version"):
+        blocks.append(H3("Package Information"))
+        stats_items = []
+        if pypi_stats.get("version"):
+            stats_items.append(Li(Strong("Latest Version: "), pypi_stats["version"]))
+        if pypi_stats.get("requires_python"):
+            stats_items.append(Li(Strong("Python: "), pypi_stats["requires_python"]))
+        downloads = pypi_stats.get("downloads", {})
+        if downloads and downloads.get("last_month"):
+            stats_items.append(Li(Strong("Monthly Downloads: "), f"{downloads['last_month']:,}"))
+        if stats_items:
+            blocks.append(Ul(*stats_items))
+
+    # === Data freshness indicator ===
+    generated_at = enhanced.get("generated_at")
+    data_sources = enhanced.get("data_sources", [])
+    if generated_at or data_sources:
+        freshness_text = []
+        if generated_at:
+            try:
+                dt = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+                freshness_text.append(f"Content updated: {dt.strftime('%Y-%m-%d')}")
+            except ValueError:
+                pass
+        if data_sources:
+            freshness_text.append(f"Data sources: {', '.join(data_sources)}")
+        if freshness_text:
+            blocks.append(Div(P(" | ".join(freshness_text)), cls="data-freshness"))
+
+    return blocks
+
+
+def get_tool_noindex_status(tool: dict) -> bool:
+    """Check if a tool should have noindex meta tag."""
+    enhanced_v2 = tool.get("enhanced_content_v2") or {}
+    tier = enhanced_v2.get("tier") or tool.get("_tier")
+    if tier == "noindex":
+        return True
+    return tool.get("noindex") is True
 
 
 def render_comparison_sections(comparison: dict, tool1_name: str, tool2_name: str) -> list:
@@ -1039,6 +1289,7 @@ async def get_tool_page(slug: str):
     pricing = tool.get("pricing")
     meta_title = generate_meta_title(tool["name"], tool.get("category", "AI Tool"), pricing=pricing)
     meta_desc = generate_meta_description(tool["name"], tool["description"], pricing=pricing)
+    robots_content = "noindex,follow" if get_tool_noindex_status(tool) else "index,follow"
 
     # Generate breadcrumbs
     breadcrumbs = generate_breadcrumb_list(
@@ -1068,7 +1319,7 @@ async def get_tool_page(slug: str):
             Meta({"charset": "utf-8"}),
             Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
             Meta({"name": "description", "content": meta_desc}),
-            Meta({"name": "robots", "content": "index, follow"}),
+            Meta({"name": "robots", "content": robots_content}),
             Link(rel="canonical", href=get_canonical_url(f"tools/{slug}")),
             Meta({"property": "og:title", "content": meta_title}),
             Meta({"property": "og:description", "content": meta_desc}),

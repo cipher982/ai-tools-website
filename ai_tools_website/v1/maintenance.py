@@ -14,6 +14,7 @@ from .data_manager import save_tools
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import MAINTENANCE_MODEL
+from .quality_tiers import tier_all_tools
 from .search import build_category_context
 from .search import client
 from .search import smart_deduplicate_tools
@@ -195,11 +196,33 @@ async def deduplicate_database() -> None:
         logger.info("Deduplication complete!")
 
 
+async def tier_database() -> None:
+    """Re-calculate quality tiers for all tools."""
+    with pipeline_summary("maintenance_tiering") as summary:
+        logger.info("Starting tool tiering...")
+        current = load_tools()
+        tools = current["tools"]
+        logger.info(f"Tiering {len(tools)} tools")
+
+        # In a full run, we'd pre-gather external data here.
+        # For this maintenance task, we use what's already in the tool records.
+        tiered = tier_all_tools(tools)
+
+        # tier_all_tools modifies the tool dicts in place (sets _tier and _importance_score)
+        save_tools(current)
+
+        for tier_name, tier_tools in tiered.items():
+            summary.add_metric(f"count_{tier_name}", len(tier_tools))
+            logger.info(f"Tier {tier_name}: {len(tier_tools)} tools")
+
+        logger.info("Tiering complete!")
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="AI Tools Website Maintenance Tasks")
-    parser.add_argument("task", choices=["deduplicate", "recategorize"], help="Maintenance task to perform")
+    parser.add_argument("task", choices=["deduplicate", "recategorize", "tier"], help="Maintenance task to perform")
     parser.add_argument("--yes", "-y", action="store_true", help="Auto-accept changes without prompting")
 
     args = parser.parse_args()
@@ -209,3 +232,5 @@ if __name__ == "__main__":
         asyncio.run(deduplicate_database())
     elif args.task == "recategorize":
         asyncio.run(recategorize_database(auto_accept=args.yes))
+    elif args.task == "tier":
+        asyncio.run(tier_database())

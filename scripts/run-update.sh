@@ -8,7 +8,15 @@ if uv run python -m ai_tools_website.v1.search; then
     # Automatically reorganize categories using the maintenance task.
     if uv run python -m ai_tools_website.v1.maintenance recategorize -y; then
         echo "[$(date -u)] Recategorization finished successfully"
-        echo "[$(date -u)] Update workflow completed successfully"
+        
+        echo "[$(date -u)] Starting quality tiering..."
+        if uv run python -m ai_tools_website.v1.maintenance tier; then
+            echo "[$(date -u)] Tiering finished successfully"
+            echo "[$(date -u)] Update workflow completed successfully"
+        else
+            echo "[$(date -u)] Tiering failed with exit code $?"
+            exit 1
+        fi
     else
         echo "[$(date -u)] Recategorization failed with exit code $?"
         exit 1

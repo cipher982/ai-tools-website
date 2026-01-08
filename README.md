@@ -116,9 +116,10 @@ The updater service (`Dockerfile.updater`) implements:
 4. Configurable update frequency via crontab
 
 ### Content Enhancement Process
-- Weekly Supercronic job calls `run-enhancement.sh`, which executes `uv run python -m ai_tools_website.v1.content_enhancer` inside the updater container.
-- The enhancer enriches tool records in-place with optional `enhanced_content` sections and timestamps (`enhanced_at`).
-- Regeneration limits (`CONTENT_ENHANCER_MAX_PER_RUN`, `CONTENT_ENHANCER_STALE_DAYS`) are configurable. `CONTENT_ENHANCER_MODEL` **must** be set in the environment; the application exits if it is missing.
+- Weekly Supercronic job calls `run-enhancement.sh`, which executes `uv run python -m ai_tools_website.v1.content_enhancer_v2` inside the updater container.
+- The V2 enhancer uses a multi-stage pipeline (Tavily search + LLM analysis) to enrich tool records with detailed information, installation commands, and feature lists.
+- **Quality Tiering:** Tools are automatically assigned to tiers (Tier 1, Tier 2, Tier 3, or noindex) based on importance signals like GitHub stars and HuggingFace downloads. This ensures resources are focused on high-value tools.
+- Regeneration limits (`CONTENT_ENHANCER_MAX_PER_RUN`) are configurable. `CONTENT_ENHANCER_MODEL` **must** be set in the environment.
 
 ### Storage Implementation
 The system implements a flexible storage system:
