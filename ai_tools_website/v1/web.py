@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
@@ -326,10 +327,10 @@ def render_tool_sections(tool: dict) -> list:
     overview = enhanced.get("overview")
     if overview and overview.get("body"):
         blocks.append(H2(overview.get("heading", "Overview")))
-        blocks.append(P(overview["body"]))
+        blocks.append(P(*linkify_text(overview["body"])))
     else:
         blocks.append(H2("Overview"))
-        blocks.append(P(tool.get("description", "")))
+        blocks.append(P(*linkify_text(tool.get("description", ""))))
 
     features = enhanced.get("key_features") or {}
     feature_items = features.get("items") or []
@@ -352,7 +353,7 @@ def render_tool_sections(tool: dict) -> list:
     pricing = enhanced.get("pricing") or {}
     if pricing.get("details"):
         blocks.append(H3(pricing.get("heading", "Pricing")))
-        blocks.append(P(pricing["details"]))
+        blocks.append(P(*linkify_text(pricing["details"])))
 
     limitations = enhanced.get("limitations") or {}
     limitation_items = limitations.get("items") or []
@@ -361,6 +362,36 @@ def render_tool_sections(tool: dict) -> list:
         blocks.append(Ul(*[Li(item) for item in limitation_items]))
 
     return blocks
+
+
+def linkify_text(text: str) -> list:
+    """Convert URLs in text to clickable A tags for FastHTML.
+
+    Returns a list of strings and A components.
+    """
+    if not text or not isinstance(text, str):
+        return [text]
+
+    # Regex for URLs (handles most common cases)
+    url_pattern = r"(https?://[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|/)))"
+
+    parts = []
+    last_idx = 0
+    for match in re.finditer(url_pattern, text):
+        # Add text before match
+        if match.start() > last_idx:
+            parts.append(text[last_idx : match.start()])
+
+        url = match.group(0)
+        # Add A tag
+        parts.append(A(url, href=url, target="_blank", rel="noopener noreferrer"))
+        last_idx = match.end()
+
+    # Add remaining text
+    if last_idx < len(text):
+        parts.append(text[last_idx:])
+
+    return parts
 
 
 def render_tool_sections_v2(tool: dict) -> list:
@@ -381,16 +412,16 @@ def render_tool_sections_v2(tool: dict) -> list:
     overview = enhanced.get("overview", {})
     if isinstance(overview, dict) and overview.get("body"):
         blocks.append(H2("Overview"))
-        blocks.append(P(overview["body"]))
+        blocks.append(P(*linkify_text(overview["body"])))
     elif isinstance(overview, str) and overview:
         blocks.append(H2("Overview"))
-        blocks.append(P(overview))
+        blocks.append(P(*linkify_text(overview)))
     else:
         # Fallback to tool description
         desc = tool.get("description", "")
         if desc:
             blocks.append(H2("Overview"))
-            blocks.append(P(desc))
+            blocks.append(P(*linkify_text(desc)))
 
     # === GitHub Stats Section (for open source tools) ===
     github_stats = enhanced.get("github_stats")
@@ -417,7 +448,7 @@ def render_tool_sections_v2(tool: dict) -> list:
         # GitHub analysis text if available
         github_analysis = enhanced.get("github_analysis", {})
         if isinstance(github_analysis, dict) and github_analysis.get("body"):
-            blocks.append(P(github_analysis["body"]))
+            blocks.append(P(*linkify_text(github_analysis["body"])))
 
     # === HuggingFace Stats Section (for ML models) ===
     hf_stats = enhanced.get("huggingface_stats")
@@ -445,7 +476,7 @@ def render_tool_sections_v2(tool: dict) -> list:
     model_details = enhanced.get("model_details", {})
     if isinstance(model_details, dict) and model_details.get("body"):
         blocks.append(H3("Model Details"))
-        blocks.append(P(model_details["body"]))
+        blocks.append(P(*linkify_text(model_details["body"])))
 
     # === Installation Section ===
     installation = enhanced.get("installation", {})
@@ -525,10 +556,10 @@ def render_tool_sections_v2(tool: dict) -> list:
                 if tier_features:
                     blocks.append(Ul(*[Li(f) for f in tier_features]))
             if pricing.get("notes"):
-                blocks.append(P(pricing["notes"]))
+                blocks.append(P(*linkify_text(pricing["notes"])))
         elif pricing.get("summary"):
             blocks.append(H3("Pricing"))
-            blocks.append(P(pricing["summary"]))
+            blocks.append(P(*linkify_text(pricing["summary"])))
 
     # === Benchmarks Section ===
     benchmarks = enhanced.get("benchmarks", {})
@@ -542,7 +573,7 @@ def render_tool_sections_v2(tool: dict) -> list:
                 text = f"{metric_name}: {metric_value}"
                 if metric_source:
                     text += f" (Source: {metric_source})"
-                blocks.append(P(text))
+                blocks.append(P(*linkify_text(text)))
 
     # === Alternatives Section ===
     alternatives = enhanced.get("alternatives", {})
@@ -556,7 +587,7 @@ def render_tool_sections_v2(tool: dict) -> list:
     community = enhanced.get("community", {})
     if isinstance(community, dict) and community.get("summary"):
         blocks.append(H3("Community"))
-        blocks.append(P(community["summary"]))
+        blocks.append(P(*linkify_text(community["summary"])))
 
     # === PyPI Stats (if available) ===
     pypi_stats = enhanced.get("pypi_stats")
@@ -639,7 +670,7 @@ def render_comparison_sections(comparison: dict, tool1_name: str, tool2_name: st
     overview = comparison.get("overview", "")
     if overview:
         blocks.append(H2("Overview"))
-        blocks.append(P(overview))
+        blocks.append(P(*linkify_text(overview)))
 
     # Detailed comparison sections
     detailed = comparison.get("detailed_comparison", {})
@@ -648,31 +679,31 @@ def render_comparison_sections(comparison: dict, tool1_name: str, tool2_name: st
     pricing = detailed.get("pricing", "")
     if pricing:
         blocks.append(H2("Pricing Comparison"))
-        blocks.append(P(pricing))
+        blocks.append(P(*linkify_text(pricing)))
 
     # Features section
     features = detailed.get("features", "")
     if features:
         blocks.append(H2("Feature Comparison"))
-        blocks.append(P(features))
+        blocks.append(P(*linkify_text(features)))
 
     # Performance section
     performance = detailed.get("performance", "")
     if performance:
         blocks.append(H2("Performance & Reliability"))
-        blocks.append(P(performance))
+        blocks.append(P(*linkify_text(performance)))
 
     # Ease of use section
     ease_of_use = detailed.get("ease_of_use", "")
     if ease_of_use:
         blocks.append(H2("Ease of Use"))
-        blocks.append(P(ease_of_use))
+        blocks.append(P(*linkify_text(ease_of_use)))
 
     # Use cases section
     use_cases = detailed.get("use_cases", "")
     if use_cases:
         blocks.append(H2("Use Cases & Recommendations"))
-        blocks.append(P(use_cases))
+        blocks.append(P(*linkify_text(use_cases)))
 
     # Pros and cons section
     pros_cons = comparison.get("pros_cons", {})
@@ -706,13 +737,13 @@ def render_comparison_sections(comparison: dict, tool1_name: str, tool2_name: st
     community = detailed.get("community", "")
     if community:
         blocks.append(H2("Community & Support"))
-        blocks.append(P(community))
+        blocks.append(P(*linkify_text(community)))
 
     # Verdict section
     verdict = comparison.get("verdict", "")
     if verdict:
         blocks.append(H2("Final Verdict"))
-        blocks.append(P(verdict))
+        blocks.append(P(*linkify_text(verdict)))
 
     return blocks
 
