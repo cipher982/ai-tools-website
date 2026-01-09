@@ -372,19 +372,38 @@ def linkify_text(text: str) -> list:
     if not text or not isinstance(text, str):
         return [text]
 
-    # Regex for URLs (handles most common cases)
-    url_pattern = r"(https?://[^\s()<>]+(?:\([\w\d]+\)|([^[:punct:]\s]|/)))"
+    # Match greedily until whitespace or common closing delimiters
+    url_pattern = re.compile(r'https?://[^\s<>"]+')
 
     parts = []
     last_idx = 0
-    for match in re.finditer(url_pattern, text):
+    for match in url_pattern.finditer(text):
         # Add text before match
         if match.start() > last_idx:
             parts.append(text[last_idx : match.start()])
 
-        url = match.group(0)
+        raw_url = match.group(0)
+
+        # Heuristic: strip trailing punctuation that's likely part of the sentence
+        clean_url = raw_url
+        stripped_suffix = ""
+
+        while clean_url:
+            last_char = clean_url[-1]
+            if last_char in ".,!?;:)":
+                # Special case: closing parenthesis is kept if it matches an opening one in the URL
+                if last_char == ")" and clean_url.count("(") > clean_url.count(")") - 1:
+                    break
+                stripped_suffix = last_char + stripped_suffix
+                clean_url = clean_url[:-1]
+            else:
+                break
+
         # Add A tag
-        parts.append(A(url, href=url, target="_blank", rel="noopener noreferrer"))
+        parts.append(A(clean_url, href=clean_url, target="_blank", rel="noopener noreferrer"))
+        if stripped_suffix:
+            parts.append(stripped_suffix)
+
         last_idx = match.end()
 
     # Add remaining text
