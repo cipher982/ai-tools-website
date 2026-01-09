@@ -119,8 +119,10 @@ def _build_tool_entries(tools: List[Dict[str, str]], base_url: str) -> List[Dict
         if not slug:
             continue
         lastmod = _choose_lastmod(
+            tool.get("enhanced_at_v2"),
             tool.get("last_reviewed_at"),
             tool.get("last_enhanced_at"),
+            tool.get("enhanced_at"),
             tool.get("discovered_at"),
         )
         entries.append(
