@@ -604,7 +604,7 @@ def render_tool_sections_v2(tool: dict) -> list:
         if generated_at:
             try:
                 dt = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
-                timestamp_text = f"Verified: {dt.strftime('%Y-%m-%d')}"
+                timestamp_text = f"Last Refreshed: {dt.strftime('%Y-%m-%d')}"
             except ValueError:
                 pass
 
