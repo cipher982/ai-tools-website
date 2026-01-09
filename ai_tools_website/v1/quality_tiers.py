@@ -323,10 +323,10 @@ def should_refresh(tool: dict[str, Any], tier: Optional[str] = None) -> bool:
     if config.refresh_days == 0:
         return False  # Never refresh noindex
 
-    # Check enhanced_content_v2 timestamp
-    enhanced_at = tool.get("enhanced_at_v2") or tool.get("enhanced_at")
+    # Priority: Check enhanced_content_v2 timestamp
+    enhanced_at = tool.get("enhanced_at_v2")
     if not enhanced_at:
-        return True  # Never enhanced
+        return True  # No V2 content yet, always refresh
 
     try:
         enhanced_time = datetime.fromisoformat(enhanced_at.replace("Z", "+00:00"))
