@@ -218,11 +218,82 @@ async def tier_database() -> None:
         logger.info("Tiering complete!")
 
 
+async def tier_database_with_traffic() -> None:
+    """Re-calculate quality tiers for all tools, including Umami traffic data.
+
+    This fetches pageview data from Umami and uses percentile-based scoring
+    to boost high-traffic tools in the tier rankings.
+    """
+    from .data_aggregators import fetch_traffic_stats
+    from .seo_utils import generate_tool_slug
+
+    with pipeline_summary("maintenance_tiering_traffic") as summary:
+        logger.info("Starting tool tiering with traffic data...")
+        current = load_tools()
+        tools = current["tools"]
+        logger.info(f"Tiering {len(tools)} tools")
+
+        # Fetch all Umami traffic data in one batch
+        logger.info("Fetching Umami traffic data...")
+        try:
+            traffic_stats = await fetch_traffic_stats()
+            summary.add_metric("tools_with_traffic", len(traffic_stats))
+            logger.info(f"Got traffic data for {len(traffic_stats)} tools")
+
+            # Log top 10 by traffic for visibility
+            if traffic_stats:
+                sorted_traffic = sorted(
+                    traffic_stats.items(),
+                    key=lambda x: x[1].get("pageviews_30d", 0),
+                    reverse=True,
+                )[:10]
+                logger.info("Top 10 tools by traffic:")
+                for slug, stats in sorted_traffic:
+                    logger.info(
+                        f"  {slug}: {stats.get('pageviews_30d', 0)} views, " f"score +{stats.get('traffic_score', 0)}"
+                    )
+        except Exception as exc:
+            logger.warning(f"Failed to fetch Umami data, continuing without: {exc}")
+            traffic_stats = {}
+            summary.add_attribute("umami_fetch_failed", True)
+
+        # Build external_data_map with traffic data
+        external_data_map: dict[str, dict] = {}
+        for tool in tools:
+            tool_id = tool.get("id") or tool.get("name", "")
+            slug = generate_tool_slug(tool.get("name", "")).lower()
+
+            # Start with existing external_data from tool record
+            ext_data = dict(tool.get("external_data", {}))
+
+            # Add Umami stats if available
+            if slug in traffic_stats:
+                ext_data["umami_stats"] = traffic_stats[slug]
+
+            external_data_map[tool_id] = ext_data
+
+        # Tier with external data
+        tiered = tier_all_tools(tools, external_data_map)
+
+        # Save tiered results
+        save_tools(current)
+
+        for tier_name, tier_tools in tiered.items():
+            summary.add_metric(f"count_{tier_name}", len(tier_tools))
+            logger.info(f"Tier {tier_name}: {len(tier_tools)} tools")
+
+        logger.info("Tiering with traffic complete!")
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="AI Tools Website Maintenance Tasks")
-    parser.add_argument("task", choices=["deduplicate", "recategorize", "tier"], help="Maintenance task to perform")
+    parser.add_argument(
+        "task",
+        choices=["deduplicate", "recategorize", "tier", "tier-traffic"],
+        help="Maintenance task to perform",
+    )
     parser.add_argument("--yes", "-y", action="store_true", help="Auto-accept changes without prompting")
 
     args = parser.parse_args()
@@ -234,3 +305,5 @@ if __name__ == "__main__":
         asyncio.run(recategorize_database(auto_accept=args.yes))
     elif args.task == "tier":
         asyncio.run(tier_database())
+    elif args.task == "tier-traffic":
+        asyncio.run(tier_database_with_traffic())

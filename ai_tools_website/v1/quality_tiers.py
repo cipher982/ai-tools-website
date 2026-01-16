@@ -93,18 +93,19 @@ def calculate_importance_score(
     """Calculate importance score for a tool (0-100).
 
     Scoring factors:
-    - GitHub stars (if open source)
-    - HuggingFace downloads (if ML model)
-    - Category popularity
-    - Content quality signals
-    - Recency bonus
+    - GitHub stars (if open source): max 35 points
+    - HuggingFace downloads (if ML model): max 35 points
+    - Category popularity: max 15 points
+    - Content quality signals: max 10 points
+    - Existing content quality: max 5 points
+    - Umami traffic (percentile-based): max 25 points
 
     Args:
         tool: Tool dictionary
-        external_data: Pre-fetched external data (github_stats, hf_stats, etc.)
+        external_data: Pre-fetched external data (github_stats, hf_stats, umami_stats, etc.)
 
     Returns:
-        Score from 0-100
+        Score from 0-100 (capped)
     """
     score = 0
     external_data = external_data or {}
@@ -229,6 +230,12 @@ def calculate_importance_score(
         # Has comparisons
         if tool.get("comparisons"):
             score += 3
+
+    # === Umami Traffic Metrics (max 25 points) ===
+    # Pre-calculated percentile-based score from fetch_traffic_stats()
+    umami_stats = external_data.get("umami_stats", {})
+    traffic_score = umami_stats.get("traffic_score", 0)
+    score += traffic_score
 
     # Cap at 100
     return min(score, 100)
