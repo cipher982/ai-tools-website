@@ -1,18 +1,27 @@
+# AI Tools Website Updater Container
+#
+# This container provides UV and all dependencies for running maintenance tasks.
+# Scheduling is handled by Sauron (centralized scheduler on clifford).
+# Sauron runs: docker exec <container> uv run python -m ai_tools_website.v1.<module>
+#
+# Jobs:
+# - aitools-discovery (daily 02:00): search + recategorize + tier
+# - aitools-tier-traffic (Sunday 01:00): Umami traffic fetch + retier
+# - aitools-enhancement (Monday 03:00): AI content enhancement
+# - aitools-comparisons (monthly 04:00): comparison generation
+# - aitools-sitemaps (daily 05:00): sitemap regeneration
+
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install UV and supercronic for scheduling
+# Install minimal tools (procps for debugging)
 RUN apt-get update && \
-    apt-get install -y wget procps && \
-    wget https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic-linux-amd64 -O /usr/local/bin/supercronic && \
-    chmod +x /usr/local/bin/supercronic && \
-    apt-get remove -y wget && \
+    apt-get install -y procps && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create log directories with proper permissions
-RUN mkdir -p /var/log && touch /var/log/cron.log && chmod 0644 /var/log/cron.log
+# Create log directories
 RUN mkdir -p /app/logs
 
 # Install UV for better package management
@@ -24,15 +33,16 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 RUN uv sync
 
-# Copy application code and install package
+# Copy application code
 COPY ai_tools_website/ ./ai_tools_website/
 
-# Copy scripts
+# Copy scripts (kept for manual runs and debugging)
 COPY scripts/run-update.sh /usr/local/bin/
 COPY scripts/run-enhancement.sh /usr/local/bin/
 COPY scripts/run-comparisons.sh /usr/local/bin/
 COPY scripts/run-sitemaps.sh /usr/local/bin/
-COPY scripts/crontab /etc/crontab
 RUN chmod +x /usr/local/bin/run-update.sh /usr/local/bin/run-enhancement.sh /usr/local/bin/run-comparisons.sh /usr/local/bin/run-sitemaps.sh
 
-CMD ["/usr/local/bin/supercronic", "/etc/crontab"] 
+# Keep container running for Sauron to exec into
+# Sauron orchestrates all scheduled jobs via docker exec
+CMD ["tail", "-f", "/dev/null"] 
