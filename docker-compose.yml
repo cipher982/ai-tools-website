@@ -28,7 +28,7 @@ services:
       - coolify
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "pgrep", "supercronic"]
+      test: ["CMD", "true"]  # Container just stays alive for Sauron to docker exec into
       interval: 30s
       timeout: 10s
       retries: 3
