@@ -9,17 +9,50 @@ from datetime import timezone
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Literal
 from typing import Optional
 
 import click
 from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import Field
 
 from .data_manager import get_minio_client
 from .data_manager import load_tools
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import COMPARISON_DETECTOR_MODEL
+from .openai_utils import extract_responses_api_text
+from .openai_utils import parse_json_response
+from .storage import local_comparison_opportunities_path
+from .storage import read_local_json
+from .storage import use_local_storage
+from .storage import write_local_json
+
+
+# Pydantic models for structured outputs
+class ComparisonOpportunity(BaseModel):
+    """A single comparison opportunity detected by the model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tool1: str = Field(description="Exact name of the first tool")
+    tool2: str = Field(description="Exact name of the second tool")
+    rationale: str = Field(min_length=50, description="Brief explanation of why this comparison is valuable")
+    category: str = Field(description="Primary category these tools serve")
+    search_potential: Literal["high", "medium", "low"] = Field(description="Search traffic potential")
+    value_score: int = Field(ge=1, le=10, description="Quality score from 1-10")
+
+
+class DetectionResult(BaseModel):
+    """Complete detection result from the model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    comparisons: List[ComparisonOpportunity] = Field(description="List of comparison opportunities")
+
 
 load_dotenv()
 setup_logging()
@@ -31,50 +64,20 @@ DEFAULT_MAX_COMPARISONS = int(os.getenv("COMPARISON_DETECTOR_MAX_COMPARISONS", "
 DEFAULT_STALE_DAYS = int(os.getenv("COMPARISON_DETECTOR_STALE_DAYS", "30"))
 COMPARISON_OPPORTUNITIES_FILE = "comparison_opportunities.json"
 
+# Quality gate thresholds
+MIN_VALUE_SCORE = 6  # Minimum value_score for comparison to pass quality gates
+MIN_RATIONALE_LENGTH = 50  # Minimum characters for rationale field
+VALID_SEARCH_POTENTIALS = ("high", "medium")  # Accepted search_potential values
 
-def _strip_json_content(value: str) -> str:
-    """Remove Markdown code fences if present before json loading."""
-    value = value.strip()
-    if value.startswith("```"):
-        first_newline = value.find("\n")
-        if first_newline != -1:
-            value = value[first_newline + 1 :]
-        if value.endswith("```"):
-            value = value[:-3]
-    return value.strip()
+# Batch processing settings
+DEFAULT_BATCH_SIZE = 12  # Tools per batch for LLM analysis
+DESCRIPTION_PREVIEW_LENGTH = 200  # Max chars of description in batch summaries
+MAX_TAGS_IN_BATCH = 3  # Max tags to include in batch summaries
 
 
-def _parse_response(raw: str) -> Optional[Dict[str, Any]]:
-    """Safely parse JSON content from the model."""
-    try:
-        cleaned = _strip_json_content(raw)
-        return json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        logger.warning("Failed to parse comparison detection JSON: %s", exc)
-        return None
-
-
-def _extract_output_text(response: Any) -> str:
-    """Best-effort extraction of text from a Responses API payload."""
-    text = getattr(response, "output_text", "") or ""
-    if text:
-        return text
-
-    output_items = getattr(response, "output", None) or []
-    collected: list[str] = []
-    for item in output_items:
-        if getattr(item, "type", None) != "message":
-            continue
-        for content_item in getattr(item, "content", []) or []:
-            content_type = getattr(content_item, "type", None)
-            if content_type == "output_text":
-                piece = getattr(content_item, "text", "")
-                if piece:
-                    collected.append(piece)
-    return "".join(collected)
-
-
-def _prepare_tool_batch(tools: List[Dict[str, Any]], batch_size: int = 12) -> List[List[Dict[str, Any]]]:
+def _prepare_tool_batch(
+    tools: List[Dict[str, Any]], batch_size: int = DEFAULT_BATCH_SIZE
+) -> List[List[Dict[str, Any]]]:
     """Prepare tools in batches for analysis."""
     batches = []
     for i in range(0, len(tools), batch_size):
@@ -84,8 +87,8 @@ def _prepare_tool_batch(tools: List[Dict[str, Any]], batch_size: int = 12) -> Li
             summary = {
                 "name": tool.get("name"),
                 "category": tool.get("category"),
-                "description": tool.get("description", "")[:200],  # Limit description length
-                "tags": tool.get("tags", [])[:3],  # First 3 tags only
+                "description": tool.get("description", "")[:DESCRIPTION_PREVIEW_LENGTH],
+                "tags": tool.get("tags", [])[:MAX_TAGS_IN_BATCH],
                 "pricing": tool.get("pricing", ""),
                 "url": tool.get("url", ""),
             }
@@ -97,8 +100,11 @@ def _prepare_tool_batch(tools: List[Dict[str, Any]], batch_size: int = 12) -> Li
 def _detect_comparisons_batch(
     client: OpenAI, tools_batch: List[Dict[str, Any]], max_comparisons: int
 ) -> Optional[List[Dict[str, Any]]]:
-    """Analyze a batch of tools to identify comparison opportunities."""
+    """Analyze a batch of tools to identify comparison opportunities.
 
+    Uses structured outputs via Responses API for reliable JSON parsing.
+    Falls back to manual parsing if structured output fails.
+    """
     system_prompt = """You are an AI tool comparison analyst. Your job is to identify the most valuable \
 comparison opportunities from a batch of AI tools.
 
@@ -107,20 +113,6 @@ Analyze the provided tools and identify comparison opportunities that would:
 - Help users make real purchasing/adoption decisions
 - Cover tools that serve similar purposes but with different approaches
 - Focus on popular, well-known tools when possible
-
-Return ONLY valid JSON in this exact format:
-{
-  "comparisons": [
-    {
-      "tool1": "Exact Tool Name 1",
-      "tool2": "Exact Tool Name 2",
-      "rationale": "Brief explanation of why this comparison is valuable",
-      "category": "primary category these tools serve",
-      "search_potential": "high|medium|low",
-      "value_score": 1-10
-    }
-  ]
-}
 
 Quality requirements:
 - Only suggest comparisons with value_score >= 6
@@ -136,37 +128,50 @@ Target the TOP comparison opportunities from this batch. Focus on tools that use
 realistically compare when making decisions."""
 
     try:
+        # Use structured outputs with JSON schema
         response = client.responses.create(
             model=COMPARISON_DETECTOR_MODEL,
             instructions=system_prompt,
             tools=[{"type": "web_search"}],
             input=[{"role": "user", "content": [{"type": "input_text", "text": user_prompt}]}],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "detection_result",
+                    "strict": True,
+                    "schema": DetectionResult.model_json_schema(),
+                }
+            },
         )
 
-        output_text = _extract_output_text(response)
+        output_text = extract_responses_api_text(response)
         if not output_text:
             logger.warning("No output returned for batch analysis")
             return None
 
-        parsed = _parse_response(output_text)
-        if not parsed:
-            logger.warning("Failed to parse batch analysis response")
-            return None
+        # Try structured parsing first
+        try:
+            result = DetectionResult.model_validate_json(output_text)
+            comparisons = [c.model_dump() for c in result.comparisons]
+        except Exception as parse_exc:
+            logger.warning(f"Structured parse failed: {parse_exc}, falling back to manual")
+            # Fallback to manual JSON parsing
+            parsed = parse_json_response(output_text, context="batch comparison detection")
+            if not parsed:
+                return None
+            comparisons = parsed.get("comparisons", [])
 
-        # Validate and filter comparisons
-        comparisons = parsed.get("comparisons", [])
+        # Filter by quality gates (Pydantic handles validation, but we still apply score filters)
         valid_comparisons = []
-
         for comp in comparisons:
-            # Apply quality gates
             value_score = comp.get("value_score", 0)
             search_potential = comp.get("search_potential", "low")
             rationale = comp.get("rationale", "")
 
             if (
-                value_score >= 6
-                and search_potential in ["high", "medium"]
-                and len(rationale) >= 50
+                value_score >= MIN_VALUE_SCORE
+                and search_potential in VALID_SEARCH_POTENTIALS
+                and len(rationale) >= MIN_RATIONALE_LENGTH
                 and comp.get("tool1")
                 and comp.get("tool2")
             ):
@@ -182,6 +187,26 @@ realistically compare when making decisions."""
 
 def _load_existing_opportunities() -> Dict[str, Any]:
     """Load existing comparison opportunities from MinIO."""
+    if use_local_storage():
+        path = local_comparison_opportunities_path(COMPARISON_OPPORTUNITIES_FILE)
+        if not path.exists():
+            logger.info("No existing local opportunities found, starting fresh")
+            return {
+                "opportunities": [],
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "metadata": {"total_tools_analyzed": 0, "total_comparisons_detected": 0},
+            }
+        data = read_local_json(
+            path,
+            {
+                "opportunities": [],
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "metadata": {"total_tools_analyzed": 0, "total_comparisons_detected": 0},
+            },
+        )
+        logger.info(f"Loaded existing opportunities: {len(data.get('opportunities', []))} comparisons (local)")
+        return data
+
     client = get_minio_client()
     bucket_name = os.environ["MINIO_BUCKET_NAME"]
 
@@ -201,6 +226,15 @@ def _load_existing_opportunities() -> Dict[str, Any]:
 
 def _save_opportunities(opportunities_data: Dict[str, Any]) -> None:
     """Save comparison opportunities to MinIO."""
+    if use_local_storage():
+        path = local_comparison_opportunities_path(COMPARISON_OPPORTUNITIES_FILE)
+        write_local_json(path, opportunities_data)
+        logger.info(
+            "Saved %d opportunities to local storage",
+            len(opportunities_data.get("opportunities", [])),
+        )
+        return
+
     client = get_minio_client()
     bucket_name = os.environ["MINIO_BUCKET_NAME"]
 

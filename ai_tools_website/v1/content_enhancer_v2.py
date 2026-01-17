@@ -39,11 +39,14 @@ from .data_manager import save_tools
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import CONTENT_ENHANCER_MODEL
+from .openai_utils import extract_responses_api_text
+from .openai_utils import parse_json_response
 from .quality_tiers import get_tier_config
 from .quality_tiers import should_refresh
 from .quality_tiers import tier_all_tools
 from .tool_classifier import ToolType
 from .tool_classifier import classify_tool
+from .tool_classifier import classify_tool_llm
 from .tool_classifier import get_sections_for_type
 
 load_dotenv()
@@ -54,48 +57,6 @@ logger = logging.getLogger(__name__)
 # Configuration
 DEFAULT_MAX_PER_RUN = int(os.getenv("CONTENT_ENHANCER_MAX_PER_RUN", "50"))
 DEFAULT_TIER = os.getenv("CONTENT_ENHANCER_TIER", "all")  # tier1, tier2, tier3, or all
-
-
-def _strip_json_content(value: str) -> str:
-    """Remove Markdown code fences if present."""
-    value = value.strip()
-    if value.startswith("```"):
-        first_newline = value.find("\n")
-        if first_newline != -1:
-            value = value[first_newline + 1 :]
-        if value.endswith("```"):
-            value = value[:-3]
-    return value.strip()
-
-
-def _parse_response(raw: str) -> Optional[dict[str, Any]]:
-    """Safely parse JSON content from the model."""
-    try:
-        cleaned = _strip_json_content(raw)
-        return json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        logger.warning("Failed to parse enhanced content JSON: %s", exc)
-        return None
-
-
-def _extract_output_text(response: Any) -> str:
-    """Best-effort extraction of text from OpenAI Responses API."""
-    text = getattr(response, "output_text", "") or ""
-    if text:
-        return text
-
-    output_items = getattr(response, "output", None) or []
-    collected: list[str] = []
-    for item in output_items:
-        if getattr(item, "type", None) != "message":
-            continue
-        for content_item in getattr(item, "content", []) or []:
-            content_type = getattr(content_item, "type", None)
-            if content_type == "output_text":
-                piece = getattr(content_item, "text", "")
-                if piece:
-                    collected.append(piece)
-    return "".join(collected)
 
 
 async def gather_external_data(tool: dict[str, Any]) -> dict[str, Any]:
@@ -388,12 +349,12 @@ Generate comprehensive content following the schema provided."""
         logger.error(f"OpenAI request failed for {tool_name}: {exc}")
         return None
 
-    content = _extract_output_text(response)
+    content = extract_responses_api_text(response)
     if not content:
         logger.warning(f"No content returned for {tool_name}")
         return None
 
-    parsed = _parse_response(content)
+    parsed = parse_json_response(content, context=f"enhanced content for {tool_name}")
     if not parsed:
         logger.warning(f"Failed to parse response for {tool_name}")
         return None
@@ -470,13 +431,29 @@ async def enhance_tool_v2(
     client: OpenAI,
     tool: dict[str, Any],
     tier_config: Any,
+    use_llm_classifier: bool = False,
 ) -> Optional[dict[str, Any]]:
-    """Full enhancement pipeline for a single tool."""
+    """Full enhancement pipeline for a single tool.
+
+    Args:
+        client: OpenAI client instance
+        tool: Tool dictionary to enhance
+        tier_config: Tier configuration for this tool
+        use_llm_classifier: If True, use LLM classifier with shadow mode logging
+    """
     tool_name = tool.get("name", "Unknown")
 
     # Step 1: Classify the tool
-    classification = classify_tool(tool)
-    logger.info(f"Classified {tool_name} as {classification['type']} (confidence: {classification['confidence']})")
+    if use_llm_classifier:
+        classification = classify_tool_llm(tool, client, shadow_mode=True)
+        method = classification.get("classification_method", "llm")
+    else:
+        classification = classify_tool(tool)
+        method = "rules"
+    logger.info(
+        f"Classified {tool_name} as {classification['type']} "
+        f"(confidence: {classification['confidence']}, method: {method})"
+    )
 
     # Step 2: Gather external data
     external_data = await gather_external_data(tool)
@@ -505,6 +482,7 @@ def enhance_tools_v2(
     target_tier: str,
     dry_run: bool,
     force: bool,
+    use_llm_classifier: Optional[bool] = None,
 ) -> None:
     """Main function to run the v2 enhancement pipeline."""
     with pipeline_summary("enhancement_v2") as summary:
@@ -513,9 +491,15 @@ def enhance_tools_v2(
         tools_doc = load_tools()
         tools = tools_doc.get("tools", [])
 
+        # Determine if LLM classifier should be used
+        # Default to env var, then False
+        if use_llm_classifier is None:
+            use_llm_classifier = os.getenv("USE_LLM_CLASSIFIER", "").lower() in ("1", "true", "yes")
+
         summary.add_attribute("dry_run", dry_run)
         summary.add_attribute("force", force)
         summary.add_attribute("target_tier", target_tier)
+        summary.add_attribute("use_llm_classifier", use_llm_classifier)
         summary.add_metric("max_per_run", max_per_run)
         summary.add_metric("total_tools", len(tools))
 
@@ -530,47 +514,52 @@ def enhance_tools_v2(
 
         logger.info(f"Processing {len(target_tools)} tools in {target_tier}")
 
-        updated_count = 0
-        skipped_count = 0
-        failed_count = 0
+        # Run all enhancements in a single event loop for efficiency
+        async def _process_tools() -> tuple[int, int, int]:
+            updated = 0
+            skipped = 0
+            failed = 0
 
-        for tool in target_tools:
-            if updated_count >= max_per_run:
-                break
+            for tool in target_tools:
+                if updated >= max_per_run:
+                    break
 
-            tool_name = tool.get("name", "Unknown")
-            tier = tool.get("_tier", "tier3")
+                tool_name = tool.get("name", "Unknown")
+                tier = tool.get("_tier", "tier3")
 
-            # Check if refresh needed (unless forcing)
-            if not force and not should_refresh(tool, tier):
-                skipped_count += 1
-                continue
+                # Check if refresh needed (unless forcing)
+                if not force and not should_refresh(tool, tier):
+                    skipped += 1
+                    continue
 
-            tier_config = get_tier_config(tier)
+                tier_config = get_tier_config(tier)
 
-            # Skip noindex tools
-            if tier_config.noindex:
-                skipped_count += 1
-                continue
+                # Skip noindex tools
+                if tier_config.noindex:
+                    skipped += 1
+                    continue
 
-            logger.info(f"Enhancing {tool_name} (tier: {tier})")
+                logger.info(f"Enhancing {tool_name} (tier: {tier})")
 
-            # Run async enhancement
-            try:
-                enhanced = asyncio.run(enhance_tool_v2(client, tool, tier_config))
-            except Exception as exc:
-                logger.error(f"Enhancement failed for {tool_name}: {exc}")
-                failed_count += 1
-                continue
+                try:
+                    enhanced = await enhance_tool_v2(client, tool, tier_config, use_llm_classifier=use_llm_classifier)
+                except Exception:
+                    logger.exception(f"Enhancement failed for {tool_name}")
+                    failed += 1
+                    continue
 
-            if not enhanced:
-                failed_count += 1
-                continue
+                if not enhanced:
+                    failed += 1
+                    continue
 
-            # Store enhanced content
-            tool["enhanced_content_v2"] = enhanced
-            tool["enhanced_at_v2"] = datetime.now(timezone.utc).isoformat()
-            updated_count += 1
+                # Store enhanced content
+                tool["enhanced_content_v2"] = enhanced
+                tool["enhanced_at_v2"] = datetime.now(timezone.utc).isoformat()
+                updated += 1
+
+            return updated, skipped, failed
+
+        updated_count, skipped_count, failed_count = asyncio.run(_process_tools())
 
         if updated_count and not dry_run:
             save_tools(tools_doc)

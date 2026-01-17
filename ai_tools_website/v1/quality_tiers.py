@@ -10,11 +10,30 @@ This ensures budget is spent on pages most likely to rank.
 """
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+# Static fallback category scores (used when no traffic data available)
+HIGH_VALUE_CATEGORIES = [
+    "language models",
+    "image generation",
+    "code assistants",
+    "chatbots",
+    "agents",
+    "developer tools",
+]
+MEDIUM_VALUE_CATEGORIES = [
+    "audio",
+    "video",
+    "data analysis",
+    "automation",
+    "writing",
+]
 
 MIN_DESCRIPTION_CHARS_FOR_INDEX = 60
 
@@ -86,9 +105,80 @@ TIERS = {
 }
 
 
+def compute_category_scores_from_traffic(
+    tools: list[dict[str, Any]],
+    traffic_by_slug: dict[str, dict[str, Any]],
+) -> dict[str, int]:
+    """Compute dynamic category scores based on actual traffic data.
+
+    Aggregates pageviews by category and assigns scores based on percentiles:
+    - Top 20% of categories: 15 points
+    - Next 30% of categories: 10 points
+    - Bottom 50% of categories: 5 points
+
+    Args:
+        tools: List of tool dictionaries
+        traffic_by_slug: Dict mapping tool slugs to traffic stats
+
+    Returns:
+        Dict mapping category names (lowercase) to score values (5, 10, or 15)
+    """
+    if not traffic_by_slug:
+        return {}
+
+    # Aggregate traffic by category
+    category_traffic: dict[str, int] = defaultdict(int)
+    category_counts: dict[str, int] = defaultdict(int)
+
+    for tool in tools:
+        category = (tool.get("category") or "").lower().strip()
+        if not category:
+            continue
+
+        slug = (tool.get("slug") or "").lower()
+        if slug in traffic_by_slug:
+            pageviews = traffic_by_slug[slug].get("pageviews_30d", 0)
+            category_traffic[category] += pageviews
+            category_counts[category] += 1
+
+    if not category_traffic:
+        return {}
+
+    # Sort categories by total traffic (descending)
+    sorted_categories = sorted(
+        category_traffic.keys(),
+        key=lambda c: category_traffic[c],
+        reverse=True,
+    )
+
+    # Assign scores based on percentile thresholds
+    total_categories = len(sorted_categories)
+    top_20_cutoff = int(total_categories * 0.2)
+    top_50_cutoff = int(total_categories * 0.5)
+
+    category_scores: dict[str, int] = {}
+    for i, category in enumerate(sorted_categories):
+        if i < top_20_cutoff:
+            category_scores[category] = 15  # Top 20%
+        elif i < top_50_cutoff:
+            category_scores[category] = 10  # Next 30%
+        else:
+            category_scores[category] = 5  # Bottom 50%
+
+    logger.info(
+        f"Computed dynamic category scores: "
+        f"{sum(1 for s in category_scores.values() if s == 15)} high, "
+        f"{sum(1 for s in category_scores.values() if s == 10)} medium, "
+        f"{sum(1 for s in category_scores.values() if s == 5)} low"
+    )
+
+    return category_scores
+
+
 def calculate_importance_score(
     tool: dict[str, Any],
     external_data: Optional[dict[str, Any]] = None,
+    category_scores: Optional[dict[str, int]] = None,
 ) -> int:
     """Calculate importance score for a tool (0-100).
 
@@ -103,6 +193,8 @@ def calculate_importance_score(
     Args:
         tool: Tool dictionary
         external_data: Pre-fetched external data (github_stats, hf_stats, umami_stats, etc.)
+        category_scores: Optional dynamic category scores from traffic data (computed by
+            compute_category_scores_from_traffic). Falls back to static lists if not provided.
 
     Returns:
         Score from 0-100 (capped)
@@ -176,33 +268,23 @@ def calculate_importance_score(
 
     # === Category Popularity (max 15 points) ===
     category = tool.get("category", "").lower()
-    high_value_categories = [
-        "language models",
-        "image generation",
-        "code assistants",
-        "chatbots",
-        "agents",
-        "developer tools",
-    ]
-    medium_value_categories = [
-        "audio",
-        "video",
-        "data analysis",
-        "automation",
-        "writing",
-    ]
 
-    for cat in high_value_categories:
-        if cat in category:
-            score += 15
-            break
+    # Use dynamic scores from traffic data if available
+    if category_scores and category in category_scores:
+        score += category_scores[category]
     else:
-        for cat in medium_value_categories:
+        # Fall back to static category lists
+        for cat in HIGH_VALUE_CATEGORIES:
             if cat in category:
-                score += 10
+                score += 15
                 break
         else:
-            score += 5  # Base category score
+            for cat in MEDIUM_VALUE_CATEGORIES:
+                if cat in category:
+                    score += 10
+                    break
+            else:
+                score += 5  # Base category score
 
     # === Content Quality Signals (max 10 points) ===
     description = tool.get("description", "")
@@ -249,12 +331,14 @@ def get_tier_config(tier_name: str) -> TierConfig:
 def tier_all_tools(
     tools: list[dict[str, Any]],
     external_data_map: Optional[dict[str, dict[str, Any]]] = None,
+    category_scores: Optional[dict[str, int]] = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Assign tiers to all tools.
 
     Args:
         tools: List of tool dictionaries
         external_data_map: Map of tool name/id to external data
+        category_scores: Optional dynamic category scores from traffic data
 
     Returns:
         Dictionary with tier names as keys and lists of tools as values
@@ -272,7 +356,7 @@ def tier_all_tools(
     for tool in tools:
         tool_id = tool.get("id") or tool.get("name", "")
         external_data = external_data_map.get(tool_id, {})
-        score = calculate_importance_score(tool, external_data)
+        score = calculate_importance_score(tool, external_data, category_scores=category_scores)
         scored_tools.append((tool, score))
 
     # Sort by score descending

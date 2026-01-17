@@ -229,7 +229,10 @@ When running the search module:
 - `LANGCHAIN_PROJECT`: LangChain project name
 
 ### Storage Configuration
-- `TOOLS_FILE`: Path to tools data file (default: "data/tools.json")
+- `AITOOLS_STORAGE_BACKEND`: Storage backend (`minio` or `local`, default: `minio`)
+- `AITOOLS_LOCAL_DATA_DIR`: Local storage directory for tools/comparisons (default: `dev_cache`)
+- `TOOLS_FILE`: Path to tools data file when using local storage
+- `AITOOLS_SLUG_REGISTRY_FILE`: Optional slug registry path for local storage
 
 #### Minio Storage (optional)
 If using Minio for storage, configure:

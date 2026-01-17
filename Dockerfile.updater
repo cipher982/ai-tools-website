@@ -15,9 +15,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install minimal tools (procps for debugging)
+# Install minimal tools (procps for debugging, openssh-client for Umami access)
 RUN apt-get update && \
-    apt-get install -y procps && \
+    apt-get install -y procps openssh-client && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

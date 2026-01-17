@@ -22,6 +22,10 @@ from .data_manager import save_tools
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import COMPARISON_GENERATOR_MODEL
+from .openai_utils import count_all_citations
+from .openai_utils import extract_responses_api_citations
+from .openai_utils import extract_responses_api_text
+from .openai_utils import parse_json_response
 from .seo_utils import generate_comparison_slug
 from .seo_utils import generate_tool_slug
 from .slug_registry import collect_existing_slugs
@@ -29,6 +33,9 @@ from .slug_registry import ensure_unique_slug
 from .slug_registry import load_slug_registry
 from .slug_registry import register_comparison_slug
 from .slug_registry import save_slug_registry
+from .storage import local_comparison_opportunities_path
+from .storage import read_local_json
+from .storage import use_local_storage
 
 load_dotenv()
 setup_logging()
@@ -45,50 +52,15 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _strip_json_content(value: str) -> str:
-    """Remove Markdown code fences if present before json loading."""
-    value = value.strip()
-    if value.startswith("```"):
-        first_newline = value.find("\n")
-        if first_newline != -1:
-            value = value[first_newline + 1 :]
-        if value.endswith("```"):
-            value = value[:-3]
-    return value.strip()
-
-
-def _parse_response(raw: str) -> Optional[Dict[str, Any]]:
-    """Safely parse JSON content from the model."""
-    try:
-        cleaned = _strip_json_content(raw)
-        return json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        logger.warning("Failed to parse comparison generation JSON: %s", exc)
-        return None
-
-
-def _extract_output_text(response: Any) -> str:
-    """Best-effort extraction of text from a Responses API payload."""
-    text = getattr(response, "output_text", "") or ""
-    if text:
-        return text
-
-    output_items = getattr(response, "output", None) or []
-    collected: list[str] = []
-    for item in output_items:
-        if getattr(item, "type", None) != "message":
-            continue
-        for content_item in getattr(item, "content", []) or []:
-            content_type = getattr(content_item, "type", None)
-            if content_type == "output_text":
-                piece = getattr(content_item, "text", "")
-                if piece:
-                    collected.append(piece)
-    return "".join(collected)
-
-
 def _load_comparison_opportunities() -> List[Dict[str, Any]]:
     """Load comparison opportunities from MinIO."""
+    if use_local_storage():
+        path = local_comparison_opportunities_path(COMPARISON_OPPORTUNITIES_FILE)
+        data = read_local_json(path, {"opportunities": []})
+        opportunities = data.get("opportunities", [])
+        logger.info(f"Loaded {len(opportunities)} comparison opportunities (local)")
+        return opportunities
+
     client = get_minio_client()
     bucket_name = os.environ["MINIO_BUCKET_NAME"]
 
@@ -231,23 +203,35 @@ their specific needs and use cases."""
             input=[{"role": "user", "content": [{"type": "input_text", "text": user_prompt}]}],
         )
 
-        output_text = _extract_output_text(response)
+        output_text = extract_responses_api_text(response)
         if not output_text:
             logger.warning(f"No output returned for comparison: {tool1_name} vs {tool2_name}")
             return None
 
-        parsed = _parse_response(output_text)
+        # Extract citations from API annotations before parsing JSON
+        api_citations = extract_responses_api_citations(response)
+
+        parsed = parse_json_response(output_text, context=f"comparison {tool1_name} vs {tool2_name}")
         if not parsed:
             logger.warning(f"Failed to parse comparison response: {tool1_name} vs {tool2_name}")
             return None
 
-        # Validate content quality
-        if not _validate_comparison_quality(parsed, tool1_name, tool2_name):
+        # Validate content quality with citation data
+        if not _validate_comparison_quality(parsed, tool1_name, tool2_name, api_citations=api_citations):
             return None
+
+        # Count citations for storage - use same logic as validation
+        # (API citations preferred, fallback to text-based counting)
+        detailed = parsed.get("detailed_comparison", {})
+        total_content = (
+            parsed.get("overview", "") + " ".join(str(v) for v in detailed.values()) + parsed.get("verdict", "")
+        )
+        citation_count = count_all_citations(total_content, api_citations=api_citations)
 
         # Add metadata
         parsed["generated_at"] = datetime.now(timezone.utc).isoformat()
         parsed["opportunity"] = opportunity
+        parsed["citation_count"] = citation_count
 
         return parsed
 
@@ -256,9 +240,23 @@ their specific needs and use cases."""
         return None
 
 
-def _validate_comparison_quality(comparison: Dict[str, Any], tool1: str, tool2: str) -> bool:
-    """Apply quality gates to generated comparison content."""
+def _validate_comparison_quality(
+    comparison: Dict[str, Any],
+    tool1: str,
+    tool2: str,
+    api_citations: Optional[List[Dict[str, Any]]] = None,
+) -> bool:
+    """Apply quality gates to generated comparison content.
 
+    Args:
+        comparison: Parsed comparison data
+        tool1: Name of first tool
+        tool2: Name of second tool
+        api_citations: Citations extracted from Responses API annotations (preferred)
+
+    Returns:
+        True if quality gates pass
+    """
     # Check required fields
     required_fields = ["title", "meta_description", "overview", "detailed_comparison", "verdict"]
     for field in required_fields:
@@ -280,28 +278,14 @@ def _validate_comparison_quality(comparison: Dict[str, Any], tool1: str, tool2: 
     total_content += " ".join(detailed.values())
     total_content += comparison.get("verdict", "")
 
-    if len(total_content) < 1500:  # Lowered from 2000 to 1500 for more realistic threshold
+    if len(total_content) < 1500:
         logger.warning(f"Content too short ({len(total_content)} chars) for comparison: {tool1} vs {tool2}")
         return False
 
-    # Check for citation patterns
-    citation_patterns = [
-        "according to",
-        "reports that",
-        "states that",
-        "pricing page",
-        "documentation",
-        "review on",
-        "users report",
-        "benchmark shows",
-        "study found",
-        "analysis by",
-    ]
+    # Count citations - prefer API annotations, fallback to text-based counting
+    citations_found = count_all_citations(total_content, api_citations=api_citations)
 
-    content_lower = total_content.lower()
-    citations_found = sum(1 for pattern in citation_patterns if pattern in content_lower)
-
-    if citations_found < 2:  # Lowered from 3 to 2 for more realistic threshold
+    if citations_found < 2:
         logger.warning(f"Insufficient citations ({citations_found}) in comparison: {tool1} vs {tool2}")
         return False
 

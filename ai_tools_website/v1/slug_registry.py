@@ -15,6 +15,10 @@ from minio.error import S3Error
 
 from ai_tools_website.v1.data_manager import BUCKET_NAME
 from ai_tools_website.v1.data_manager import get_minio_client
+from ai_tools_website.v1.storage import local_slug_registry_path
+from ai_tools_website.v1.storage import read_local_json
+from ai_tools_website.v1.storage import use_local_storage
+from ai_tools_website.v1.storage import write_local_json
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,13 @@ def _now_iso() -> str:
 
 def load_slug_registry() -> Dict[str, Dict]:
     """Load slug registry stored in MinIO."""
+    if use_local_storage():
+        path = local_slug_registry_path()
+        data = read_local_json(path, DEFAULT_REGISTRY)
+        if not isinstance(data, dict):
+            raise ValueError("Slug registry payload is not a JSON object")
+        return data
+
     client = get_minio_client()
     try:
         response = client.get_object(BUCKET_NAME, REGISTRY_KEY)
@@ -48,6 +59,12 @@ def load_slug_registry() -> Dict[str, Dict]:
 
 def save_slug_registry(registry: Dict[str, Dict]) -> None:
     """Persist slug registry back to MinIO."""
+    if use_local_storage():
+        path = local_slug_registry_path()
+        write_local_json(path, registry)
+        logger.info("Saved slug registry with %d tool entries (local)", len(registry.get("tools", {})))
+        return
+
     client = get_minio_client()
     payload = json.dumps(registry, indent=2).encode()
     client.put_object(

@@ -14,6 +14,7 @@ from .data_manager import save_tools
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import MAINTENANCE_MODEL
+from .quality_tiers import compute_category_scores_from_traffic
 from .quality_tiers import tier_all_tools
 from .search import build_category_context
 from .search import client
@@ -261,7 +262,7 @@ async def tier_database_with_traffic() -> None:
         external_data_map: dict[str, dict] = {}
         for tool in tools:
             tool_id = tool.get("id") or tool.get("name", "")
-            slug = generate_tool_slug(tool.get("name", "")).lower()
+            slug = (tool.get("slug") or generate_tool_slug(tool.get("name", ""))).lower()
 
             # Start with existing external_data from tool record
             ext_data = dict(tool.get("external_data", {}))
@@ -272,8 +273,13 @@ async def tier_database_with_traffic() -> None:
 
             external_data_map[tool_id] = ext_data
 
-        # Tier with external data
-        tiered = tier_all_tools(tools, external_data_map)
+        # Compute dynamic category scores from traffic data
+        category_scores = compute_category_scores_from_traffic(tools, traffic_stats)
+        if category_scores:
+            summary.add_metric("categories_with_traffic", len(category_scores))
+
+        # Tier with external data and dynamic category scores
+        tiered = tier_all_tools(tools, external_data_map, category_scores=category_scores)
 
         # Save tiered results
         save_tools(current)
