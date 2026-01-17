@@ -482,7 +482,7 @@ def enhance_tools_v2(
     target_tier: str,
     dry_run: bool,
     force: bool,
-    use_llm_classifier: Optional[bool] = None,
+    use_llm_classifier: bool = True,
 ) -> None:
     """Main function to run the v2 enhancement pipeline."""
     with pipeline_summary("enhancement_v2") as summary:
@@ -491,10 +491,7 @@ def enhance_tools_v2(
         tools_doc = load_tools()
         tools = tools_doc.get("tools", [])
 
-        # Determine if LLM classifier should be used
-        # Default to env var, then False
-        if use_llm_classifier is None:
-            use_llm_classifier = os.getenv("USE_LLM_CLASSIFIER", "").lower() in ("1", "true", "yes")
+        # LLM classifier is default; falls back to rules on API errors
 
         summary.add_attribute("dry_run", dry_run)
         summary.add_attribute("force", force)
