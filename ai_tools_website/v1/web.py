@@ -76,6 +76,10 @@ UMAMI_SCRIPT_SRC = os.getenv("UMAMI_SCRIPT_SRC", "https://analytics.drose.io/scr
 UMAMI_DOMAINS = os.getenv("UMAMI_DOMAINS", "drose.io")
 UMAMI_DROSE_ID = os.getenv("UMAMI_DROSE_ID", "33e9b5a0-5fbf-474c-9d60-9bee34d577bd")
 
+# MinIO public endpoint for screenshots
+MINIO_PUBLIC_URL = os.getenv("MINIO_PUBLIC_URL", "https://minio.drose.io")
+MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "aitools")
+
 
 def umami_scripts() -> list:
     """Generate Umami analytics scripts for dual tracking (project + drose.io aggregate).
@@ -170,11 +174,19 @@ def get_all_tools() -> list:
     return all_tools
 
 
+def get_tool_slug(tool: dict) -> str:
+    """Get canonical tool slug from stored data with a safe fallback."""
+    slug = tool.get("slug")
+    if slug:
+        return slug
+    return generate_tool_slug(tool.get("name", ""))
+
+
 def find_tool_by_slug(slug: str) -> dict:
     """Find tool by its generated slug"""
     all_tools = get_all_tools()
     for tool in all_tools:
-        if generate_tool_slug(tool["name"]) == slug:
+        if get_tool_slug(tool) == slug:
             return tool
     return None
 
@@ -681,6 +693,18 @@ def get_tool_noindex_status(tool: dict) -> bool:
     return tool.get("noindex") is True
 
 
+def get_screenshot_url(tool: dict) -> str | None:
+    """Get public URL for a tool's screenshot, if one exists."""
+    screenshot = tool.get("screenshot")
+    if not screenshot:
+        return None
+    key = screenshot.get("key")
+    if not key:
+        return None
+    # Construct public URL from MinIO endpoint
+    return f"{MINIO_PUBLIC_URL}/{MINIO_BUCKET_NAME}/{key}"
+
+
 def render_comparison_sections(comparison: dict, tool1_name: str, tool2_name: str) -> list:
     """Create content blocks for a comparison page."""
     blocks = []
@@ -906,7 +930,7 @@ def _format_timestamp(value: str | None) -> str:
 # Components
 def tool_card(tool):
     """Tool card component that links to internal tool page"""
-    tool_slug = generate_tool_slug(tool["name"])
+    tool_slug = get_tool_slug(tool)
     return A(
         {"href": url(f"/tools/{tool_slug}"), "_class": "tool-card"},
         H5(tool["name"]),
@@ -1341,7 +1365,7 @@ async def get():
                             "target": "_blank",
                             "_class": "github-link",
                         },
-                        Img({"src": "github-mark-white.svg", "alt": "GitHub", "width": "32", "height": "32"}),
+                        Img({"src": "/github-mark-white.svg", "alt": "GitHub", "width": "32", "height": "32"}),
                     ),
                     _class="github-corner",
                 ),
@@ -1390,8 +1414,22 @@ async def get_tool_page(slug: str):
     # Find related tools (same category)
     category = tool.get("category", "Other")
     tools_by_category = get_tools_by_category()
-    related_tools = [t for t in tools_by_category.get(category, []) if generate_tool_slug(t["name"]) != slug][:6]
+    related_tools = [t for t in tools_by_category.get(category, []) if get_tool_slug(t) != slug][:6]
     content_blocks = render_tool_sections(tool)
+
+    # Get screenshot if available
+    screenshot_url = get_screenshot_url(tool)
+    screenshot_block = None
+    if screenshot_url:
+        screenshot_block = Div(
+            Img(
+                src=screenshot_url,
+                alt=f"{tool['name']} screenshot",
+                loading="lazy",
+                _class="tool-screenshot",
+            ),
+            _class="tool-screenshot-container",
+        )
 
     return Html(
         Head(
@@ -1423,6 +1461,8 @@ async def get_tool_page(slug: str):
                 ),
                 # Main content
                 H1(f"{tool['name']} - AI {category} Tool", _class="tool-title"),
+                # Screenshot (if available)
+                screenshot_block if screenshot_block else None,
                 Div(
                     Div(
                         *content_blocks,
