@@ -26,6 +26,11 @@ SSH_HOST = os.getenv("UMAMI_SSH_HOST", "clifford")
 UMAMI_QUERY_TIMEOUT = 30  # seconds
 MIN_VIEWS_THRESHOLD = 10  # Filter noise/bot traffic
 MIN_TOTAL_VIEWS_SANITY = 100  # Skip if total views too low (indicates Umami issue)
+MAX_DATA_AGE_HOURS = 48  # Fail if no events recorded within this window
+
+
+class UmamiDataStaleError(Exception):
+    """Raised when Umami hasn't recorded any events recently."""
 
 
 def _run_umami_query(sql: str) -> str | None:
@@ -69,6 +74,28 @@ async def fetch_all_tool_pageviews(days: int = 30) -> dict[str, int]:
         Dictionary mapping tool slug to pageview count
         e.g., {"chatgpt": 15234, "whisperx": 892, ...}
     """
+    # Check data freshness — fail loudly if Umami stopped collecting
+    freshness_sql = f"""
+    SELECT EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) / 3600 as hours_stale
+    FROM website_event
+    WHERE website_id = '{UMAMI_AITOOLS_WEBSITE_ID}'
+    """.strip()
+    freshness_output = _run_umami_query(freshness_sql)
+    if freshness_output:
+        try:
+            hours_stale = float(freshness_output.strip())
+            if hours_stale > MAX_DATA_AGE_HOURS:
+                raise UmamiDataStaleError(
+                    f"Umami has not recorded any events in {hours_stale:.0f} hours "
+                    f"(threshold: {MAX_DATA_AGE_HOURS}h). "
+                    f"Check that analytics.drose.io is serving Umami, not another service."
+                )
+            logger.info(f"Umami data freshness: last event {hours_stale:.1f}h ago")
+        except (ValueError, TypeError):
+            raise UmamiDataStaleError(f"Could not parse freshness check result: {freshness_output!r}")
+    else:
+        raise UmamiDataStaleError("Umami freshness check returned no data — database may be empty or unreachable")
+
     # Query for pageviews on /aitools/tools/* paths
     # Uses split_part instead of regex for better performance
     # Strips query params and lowercases for consistent matching

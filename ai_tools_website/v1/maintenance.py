@@ -9,8 +9,9 @@ from typing import List
 from pydantic import BaseModel
 from pydantic import Field
 
+from .data_aggregators.umami_aggregator import UmamiDataStaleError
 from .data_manager import load_tools
-from .data_manager import save_tools
+from .data_manager import save_tools_with_retry
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import MAINTENANCE_MODEL
@@ -170,7 +171,7 @@ Analyze this categorization and suggest a revised category structure.""",
         # Save changes
         current["tools"] = updated_tools
         current["slug_registry_version"] = 1
-        save_tools(current)
+        save_tools_with_retry(current)
         summary.add_metric("tools_reassigned", moved_count)
         summary.add_metric("tools_renamed", renamed_count)
         logger.info("Reorganization complete!")
@@ -191,7 +192,7 @@ async def deduplicate_database() -> None:
         removed = total - len(cleaned_tools)
         logger.info(f"Removed {removed} duplicates")
         current["tools"] = cleaned_tools
-        save_tools(current)
+        save_tools_with_retry(current)
         summary.add_metric("duplicates_removed", removed)
         summary.add_metric("final_total", len(cleaned_tools))
         logger.info("Deduplication complete!")
@@ -210,7 +211,7 @@ async def tier_database() -> None:
         tiered = tier_all_tools(tools)
 
         # tier_all_tools modifies the tool dicts in place (sets _tier and _importance_score)
-        save_tools(current)
+        save_tools_with_retry(current)
 
         for tier_name, tier_tools in tiered.items():
             summary.add_metric(f"count_{tier_name}", len(tier_tools))
@@ -253,6 +254,8 @@ async def tier_database_with_traffic() -> None:
                     logger.info(
                         f"  {slug}: {stats.get('pageviews_30d', 0)} views, " f"score +{stats.get('traffic_score', 0)}"
                     )
+        except UmamiDataStaleError:
+            raise  # Data staleness is a hard failure — don't silently degrade
         except Exception as exc:
             logger.warning(f"Failed to fetch Umami data, continuing without: {exc}")
             traffic_stats = {}
@@ -282,7 +285,7 @@ async def tier_database_with_traffic() -> None:
         tiered = tier_all_tools(tools, external_data_map, category_scores=category_scores)
 
         # Save tiered results
-        save_tools(current)
+        save_tools_with_retry(current)
 
         for tier_name, tier_tools in tiered.items():
             summary.add_metric(f"count_{tier_name}", len(tier_tools))
