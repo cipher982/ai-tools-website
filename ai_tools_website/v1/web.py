@@ -1365,7 +1365,7 @@ async def get():
                             "target": "_blank",
                             "_class": "github-link",
                         },
-                        Img({"src": "/github-mark-white.svg", "alt": "GitHub", "width": "32", "height": "32"}),
+                        Img({"src": url("/github-mark-white.svg"), "alt": "GitHub", "width": "32", "height": "32"}),
                     ),
                     _class="github-corner",
                 ),
