@@ -10,6 +10,7 @@ from ai_tools_website.v1.editorial_agent import build_editorial_review_context
 from ai_tools_website.v1.editorial_agent import build_editorial_review_user_prompt
 from ai_tools_website.v1.editorial_agent import request_editorial_review
 from ai_tools_website.v1.editorial_agent import resolve_editorial_review_model
+from ai_tools_website.v1.editorial_agent import review_tool
 
 
 class _FakeResponses:
@@ -136,6 +137,80 @@ def test_request_editorial_review_raises_on_invalid_json(sample_tool):
     client = _FakeClient("not-json")
     with pytest.raises(RuntimeError, match="invalid JSON"):
         request_editorial_review(client, sample_tool, model="glm-5")
+
+
+def test_review_tool_uses_openai_base_url_when_present(sample_tool, monkeypatch):
+    captured = {}
+
+    class DummyOpenAI:
+        def __init__(self, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+    expected = EditorialReview(
+        action="keep",
+        why="Legitimate tool.",
+        ideal_user="Builders",
+        not_for=None,
+        decision_value=[],
+        page_angle=None,
+        suggested_sections=[],
+        comparison_candidates=[],
+        confidence=0.7,
+    )
+
+    def fake_request(client, tool, *, model, use_web_search):
+        captured["client"] = client
+        captured["model"] = model
+        captured["use_web_search"] = use_web_search
+        return expected
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setattr("openai.OpenAI", DummyOpenAI)
+    monkeypatch.setattr("ai_tools_website.v1.editorial_agent.request_editorial_review", fake_request)
+
+    review = review_tool(sample_tool, model="glm-5", use_web_search=False)
+
+    assert review == expected
+    assert captured["client_kwargs"] == {
+        "api_key": "test-key",
+        "base_url": "https://llm.drose.io",
+    }
+    assert captured["model"] == "glm-5"
+    assert captured["use_web_search"] is False
+
+
+def test_review_tool_skips_base_url_when_unset(sample_tool, monkeypatch):
+    captured = {}
+
+    class DummyOpenAI:
+        def __init__(self, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+    expected = EditorialReview(
+        action="keep",
+        why="Legitimate tool.",
+        ideal_user="Builders",
+        not_for=None,
+        decision_value=[],
+        page_angle=None,
+        suggested_sections=[],
+        comparison_candidates=[],
+        confidence=0.7,
+    )
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.setattr("openai.OpenAI", DummyOpenAI)
+    monkeypatch.setattr(
+        "ai_tools_website.v1.editorial_agent.request_editorial_review",
+        lambda client, tool, **kwargs: expected,
+    )
+
+    review = review_tool(sample_tool, model="glm-5")
+
+    assert review == expected
+    assert captured["client_kwargs"] == {"api_key": "test-key"}
 
 
 def test_apply_editorial_review_merges_nested_and_root_fields(sample_tool):

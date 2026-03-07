@@ -149,7 +149,11 @@ def review_tool(
     if client is None:
         from openai import OpenAI
 
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client_kwargs: dict[str, Any] = {"api_key": os.getenv("OPENAI_API_KEY")}
+        base_url = os.getenv("OPENAI_BASE_URL")
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        client = OpenAI(**client_kwargs)
     return request_editorial_review(client, tool, model=model, use_web_search=use_web_search)
 
 
