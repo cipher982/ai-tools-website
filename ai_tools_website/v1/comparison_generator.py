@@ -18,7 +18,7 @@ from openai import OpenAI
 
 from .data_manager import get_minio_client
 from .data_manager import load_tools
-from .data_manager import save_tools_with_retry
+from .data_manager import save_tools
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import COMPARISON_GENERATOR_MODEL
@@ -492,7 +492,7 @@ def generate_comparisons(*, max_per_run: int, stale_days: int, dry_run: bool, fo
         # Save updated tools data
         if generated_count > 0 and not dry_run:
             tools_data["slug_registry_version"] = 1
-            save_tools_with_retry(tools_data)
+            save_tools(tools_data)
             save_slug_registry(registry)
             logger.info(f"Saved tools database with {generated_count} new comparisons")
 

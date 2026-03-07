@@ -16,7 +16,7 @@ from typing import Tuple
 import click
 
 from ai_tools_website.v1.data_manager import load_tools
-from ai_tools_website.v1.data_manager import save_tools_with_retry
+from ai_tools_website.v1.data_manager import save_tools
 from ai_tools_website.v1.seo_utils import generate_category_slug
 from ai_tools_website.v1.seo_utils import generate_comparison_slug
 from ai_tools_website.v1.seo_utils import generate_tool_slug
@@ -208,7 +208,7 @@ def migrate_dataset(*, dry_run: bool) -> None:
         logger.info("Preview (first tool): %s", updated_tools[0] if updated_tools else {})
         return
 
-    save_tools_with_retry(tools_doc)
+    save_tools(tools_doc)
     save_slug_registry(registry)
     logger.info("Migration completed. Processed %d tools.", len(updated_tools))
 

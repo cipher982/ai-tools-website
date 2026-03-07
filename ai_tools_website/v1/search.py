@@ -25,7 +25,7 @@ from pydantic import Field
 from tavily import TavilyClient
 
 from .data_manager import load_tools
-from .data_manager import save_tools_with_retry
+from .data_manager import save_tools
 from .logging_config import IndentLogger
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
@@ -697,7 +697,7 @@ async def find_new_tools(*, use_search_cache: bool = False, dry_run: bool = Fals
                     logger.info(f"Added {len(new_tools)} new tools")
 
                 current_tools["slug_registry_version"] = 1
-                save_tools_with_retry(current_tools)
+                save_tools(current_tools)
                 save_slug_registry(registry)
 
         logger.dedent()
