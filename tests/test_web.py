@@ -25,6 +25,15 @@ def editorial_dataset():
                 "description": "A legitimate tool that should stay public.",
                 "url": "https://example.com/visible-tool",
                 "action": "keep",
+                "editorial": {
+                    "action": "keep",
+                    "why": "This is a credible builder tool with a clear use case.",
+                    "ideal_user": "Developers who want a practical workflow helper.",
+                    "not_for": "People looking for a fully managed non-technical app.",
+                    "decision_value": ["Clear workflow fit", "Practical builder value"],
+                    "page_angle": "A pragmatic AI workflow tool for developers.",
+                    "comparison_candidates": ["Aider", "Claude Code"],
+                },
                 "comparisons": {
                     "visible_tool_vs_other_tool": {
                         "slug": "visible-tool-vs-other-tool",
@@ -198,6 +207,20 @@ class TestEditorialVisibility:
         assert "Quiet Tool" not in response.text
         assert "Deleted Tool" not in response.text
         assert "Review Tool" not in response.text
+
+    def test_tool_page_renders_editorial_summary_when_present(self, editorial_client):
+        response = editorial_client.get("/tools/visible-tool")
+        assert response.status_code == 200
+        assert "Quick Take" in response.text
+        assert "Best for:" in response.text
+        assert "Why Choose It" in response.text
+        assert "Consider Instead" in response.text
+        assert "Claude Code" in response.text
+
+    def test_tool_page_omits_editorial_summary_for_legacy_records(self, editorial_client):
+        response = editorial_client.get("/tools/legacy-tool")
+        assert response.status_code == 200
+        assert "Quick Take" not in response.text
 
     def test_noindex_tool_page_stays_public_with_noindex_meta(self, editorial_client):
         response = editorial_client.get("/tools/quiet-tool")

@@ -353,6 +353,47 @@ def get_canonical_url(path: str = "") -> str:
     return f"{base}/{path}"
 
 
+def render_editorial_summary(tool: dict) -> list:
+    """Render the editorial decision layer when structured guidance exists."""
+    editorial = tool.get("editorial")
+    if not isinstance(editorial, dict):
+        return []
+
+    why = editorial.get("why")
+    ideal_user = editorial.get("ideal_user")
+    not_for = editorial.get("not_for")
+    decision_value = [item for item in editorial.get("decision_value") or [] if item]
+    page_angle = editorial.get("page_angle")
+    comparison_candidates = [item for item in editorial.get("comparison_candidates") or [] if item]
+
+    if not any([why, ideal_user, not_for, decision_value, page_angle, comparison_candidates]):
+        return []
+
+    blocks = [H2("Quick Take")]
+    if page_angle:
+        blocks.append(P(*linkify_text(page_angle)))
+    if why and why != page_angle:
+        blocks.append(P(*linkify_text(why)))
+
+    summary_items = []
+    if ideal_user:
+        summary_items.append(Li(Strong("Best for: "), ideal_user))
+    if not_for:
+        summary_items.append(Li(Strong("Skip if: "), not_for))
+    if summary_items:
+        blocks.append(Ul(*summary_items))
+
+    if decision_value:
+        blocks.append(H3("Why Choose It"))
+        blocks.append(Ul(*[Li(item) for item in decision_value]))
+
+    if comparison_candidates:
+        blocks.append(H3("Consider Instead"))
+        blocks.append(Ul(*[Li(candidate) for candidate in comparison_candidates]))
+
+    return blocks
+
+
 def render_tool_sections(tool: dict) -> list:
     """Create enhanced content blocks for a tool detail page.
 
@@ -1437,6 +1478,7 @@ async def get_tool_page(slug: str):
     category = tool.get("category", "Other")
     tools_by_category = get_listed_tools_by_category()
     related_tools = [t for t in tools_by_category.get(category, []) if get_tool_slug(t) != slug][:6]
+    editorial_blocks = render_editorial_summary(tool)
     content_blocks = render_tool_sections(tool)
 
     # Get screenshot if available
@@ -1487,6 +1529,7 @@ async def get_tool_page(slug: str):
                 screenshot_block if screenshot_block else None,
                 Div(
                     Div(
+                        *editorial_blocks,
                         *content_blocks,
                         H3("Key Information"),
                         Ul(
