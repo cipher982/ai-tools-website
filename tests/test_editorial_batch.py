@@ -150,6 +150,9 @@ def test_run_editorial_review_batch_saves_updates_and_counts_actions():
     assert result.failed == 0
     assert result.reviewed_slugs == ["opencode", "open-aimbot"]
     assert result.action_counts == {"keep": 1, "delete": 1}
+    assert [review.slug for review in result.reviews] == ["opencode", "open-aimbot"]
+    assert result.reviews[1].action == "delete"
+    assert result.reviews[1].why == "Cheat tool."
     assert len(saved_payloads) == 1
     assert saved_payloads[0]["tools"][0]["action"] == "keep"
     assert saved_payloads[0]["tools"][1]["action"] == "delete"
@@ -202,6 +205,9 @@ def test_run_editorial_review_batch_records_failures_and_continues():
     assert result.updated == 1
     assert result.failed == 1
     assert result.failed_slugs == ["broken-tool"]
+    assert result.reviews[0].slug == "broken-tool"
+    assert result.reviews[0].error == "review_failed"
+    assert result.reviews[1].action == "keep"
     assert len(saved_payloads) == 1
     assert saved_payloads[0]["tools"][1]["action"] == "keep"
 
@@ -247,6 +253,32 @@ def test_cli_reviews_local_tools_file(tmp_path, monkeypatch):
     saved = json.loads(tools_path.read_text())
     assert saved["tools"][0]["action"] == "keep"
     assert saved["tools"][0]["editorial"]["why"] == "Legitimate builder tool."
+
+
+def test_cli_json_output_includes_review_details(tmp_path, monkeypatch):
+    tools_path = tmp_path / "tools.json"
+    tools_path.write_text(json.dumps({"tools": [build_tool("opencode")], "last_updated": ""}, indent=2))
+
+    monkeypatch.setenv("AITOOLS_STORAGE_BACKEND", "local")
+    monkeypatch.setenv("TOOLS_FILE", str(tools_path))
+    monkeypatch.setattr(editorial_batch, "setup_logging", lambda *args, **kwargs: None)
+    monkeypatch.setattr(editorial_batch, "resolve_editorial_review_model", lambda: "glm-test")
+    monkeypatch.setattr(
+        editorial_batch,
+        "review_tool",
+        lambda tool, **kwargs: make_review("keep", "Legitimate builder tool."),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(editorial_batch.main, ["--slug", "opencode", "--dry-run", "--json-output"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["selected"] == 1
+    assert payload["dry_run"] is True
+    assert payload["reviews"][0]["slug"] == "opencode"
+    assert payload["reviews"][0]["action"] == "keep"
+    assert payload["reviews"][0]["why"] == "Legitimate builder tool."
 
 
 def test_cli_dry_run_leaves_local_tools_file_unchanged(tmp_path, monkeypatch):

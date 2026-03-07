@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
 from datetime import datetime
@@ -43,6 +45,16 @@ class SelectedTool:
 
 
 @dataclass
+class ReviewedToolResult:
+    slug: str
+    action: str | None = None
+    why: str | None = None
+    confidence: float | None = None
+    page_angle: str | None = None
+    error: str | None = None
+
+
+@dataclass
 class EditorialBatchResult:
     selected: int = 0
     reviewed: int = 0
@@ -53,6 +65,21 @@ class EditorialBatchResult:
     failed_slugs: list[str] = field(default_factory=list)
     missing_slugs: list[str] = field(default_factory=list)
     action_counts: dict[str, int] = field(default_factory=dict)
+    reviews: list[ReviewedToolResult] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "selected": self.selected,
+            "reviewed": self.reviewed,
+            "updated": self.updated,
+            "failed": self.failed,
+            "dry_run": self.dry_run,
+            "reviewed_slugs": self.reviewed_slugs,
+            "failed_slugs": self.failed_slugs,
+            "missing_slugs": self.missing_slugs,
+            "action_counts": self.action_counts,
+            "reviews": [asdict(review) for review in self.reviews],
+        }
 
 
 def normalize_requested_slugs(slugs: Iterable[str] | None) -> list[str]:
@@ -264,12 +291,22 @@ def run_editorial_review_batch(
             logger.exception("Editorial review failed for %s", candidate.slug)
             result.failed += 1
             result.failed_slugs.append(candidate.slug)
+            result.reviews.append(ReviewedToolResult(slug=candidate.slug, error="review_failed"))
             continue
 
         updated_tool = apply_editorial_review(candidate.tool, review, reviewed_at=now.isoformat(), model=resolved_model)
         result.reviewed += 1
         result.reviewed_slugs.append(candidate.slug)
         result.updated += 1
+        result.reviews.append(
+            ReviewedToolResult(
+                slug=candidate.slug,
+                action=review.action,
+                why=review.why,
+                confidence=review.confidence,
+                page_angle=review.page_angle,
+            )
+        )
         action_counts[review.action] = action_counts.get(review.action, 0) + 1
         tools[candidate.index] = updated_tool
 
@@ -291,6 +328,7 @@ def run_editorial_review_batch(
 @click.option("--dry-run", is_flag=True, help="Review without persisting changes")
 @click.option("--force", is_flag=True, help="Review selected candidates even if they are fresh")
 @click.option("--use-web-search/--no-web-search", default=True, show_default=True, help="Allow web search")
+@click.option("--json-output", is_flag=True, help="Print structured JSON output")
 def main(
     max_per_run: int,
     slugs: tuple[str, ...],
@@ -298,6 +336,7 @@ def main(
     dry_run: bool,
     force: bool,
     use_web_search: bool,
+    json_output: bool,
 ) -> None:
     """Review a bounded batch of tool pages for v2 editorial decisions."""
     setup_logging()
@@ -309,6 +348,10 @@ def main(
         force=force,
         use_web_search=use_web_search,
     )
+
+    if json_output:
+        click.echo(json.dumps(result.to_dict(), indent=2))
+        return
 
     click.echo(
         " ".join(

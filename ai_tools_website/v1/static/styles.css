@@ -359,6 +359,31 @@ pre code {
     margin-top: var(--spacing-lg);
 }
 
+/* Screenshot display */
+.tool-screenshot-container {
+    margin-bottom: var(--spacing-lg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--surface-2);
+}
+
+.tool-screenshot {
+    width: 100%;
+    height: auto;
+    max-height: 500px;
+    object-fit: contain;
+    display: block;
+}
+
+.tool-screenshot-container a {
+    display: block;
+}
+
+.tool-screenshot-container a:hover .tool-screenshot {
+    opacity: 0.95;
+}
+
 .tool-content {
     background: var(--surface);
     border: 1px solid var(--border);
