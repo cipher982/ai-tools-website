@@ -70,6 +70,13 @@ def test_resolve_editorial_review_model_falls_back_to_content_enhancer(monkeypat
     assert resolve_editorial_review_model() == "glm-content"
 
 
+def test_editorial_review_schema_forbids_additional_properties():
+    schema = EditorialReview.model_json_schema()
+
+    assert schema["type"] == "object"
+    assert schema["additionalProperties"] is False
+
+
 def test_request_editorial_review_uses_structured_outputs(sample_tool):
     payload = {
         "action": "keep",

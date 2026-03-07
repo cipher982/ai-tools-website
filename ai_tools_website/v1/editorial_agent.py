@@ -11,6 +11,7 @@ from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from pydantic import Field
 
 from ai_tools_website.v1.openai_utils import extract_responses_api_text
@@ -21,6 +22,8 @@ EditorialAction = Literal["keep", "noindex", "delete", "needs_review"]
 
 class EditorialReview(BaseModel):
     """Structured editorial decision for a tool page."""
+
+    model_config = ConfigDict(extra="forbid")
 
     action: EditorialAction
     why: str
