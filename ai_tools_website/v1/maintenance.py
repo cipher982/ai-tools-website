@@ -1,6 +1,8 @@
 """Maintenance tasks for the AI tools database."""
 
+import argparse
 import asyncio
+import json
 import logging
 from datetime import datetime
 from datetime import timezone
@@ -12,6 +14,9 @@ from pydantic import Field
 from .data_aggregators.umami_aggregator import UmamiDataStaleError
 from .data_manager import load_tools
 from .data_manager import save_tools_with_retry
+from .editorial_batch import DEFAULT_MAX_PER_RUN
+from .editorial_batch import DEFAULT_STALE_AFTER_DAYS
+from .editorial_batch import run_editorial_review_batch
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import MAINTENANCE_MODEL
@@ -294,20 +299,77 @@ async def tier_database_with_traffic() -> None:
         logger.info("Tiering with traffic complete!")
 
 
-if __name__ == "__main__":
-    import argparse
+def editorial_review_database(
+    *,
+    max_per_run: int = DEFAULT_MAX_PER_RUN,
+    slugs: list[str] | None = None,
+    stale_after_days: int = DEFAULT_STALE_AFTER_DAYS,
+    dry_run: bool = False,
+    force: bool = False,
+    use_web_search: bool = True,
+    json_output: bool = False,
+):
+    """Run the bounded editorial review flow through the maintenance CLI."""
+    with pipeline_summary("maintenance_editorial_review") as summary:
+        logger.info("Starting editorial review batch...")
+        summary.add_metric("max_per_run", max_per_run)
+        summary.add_metric("stale_after_days", stale_after_days)
+        summary.add_attribute("dry_run", dry_run)
+        summary.add_attribute("force", force)
+        summary.add_attribute("use_web_search", use_web_search)
+        if slugs:
+            summary.add_attribute("requested_slugs", ",".join(slugs))
 
+        result = run_editorial_review_batch(
+            max_per_run=max_per_run,
+            slugs=slugs,
+            stale_after_days=stale_after_days,
+            dry_run=dry_run,
+            force=force,
+            use_web_search=use_web_search,
+        )
+
+        summary.add_metric("selected", result.selected)
+        summary.add_metric("reviewed", result.reviewed)
+        summary.add_metric("updated", result.updated)
+        summary.add_metric("failed", result.failed)
+        for action, count in result.action_counts.items():
+            summary.add_metric(f"action_{action}", count)
+        if result.missing_slugs:
+            summary.add_attribute("missing_slugs", ",".join(result.missing_slugs))
+
+        if json_output:
+            print(json.dumps(result.to_dict(), indent=2))
+
+        return result
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser for maintenance tasks."""
     parser = argparse.ArgumentParser(description="AI Tools Website Maintenance Tasks")
     parser.add_argument(
         "task",
-        choices=["deduplicate", "recategorize", "tier", "tier-traffic"],
+        choices=["deduplicate", "recategorize", "tier", "tier-traffic", "editorial-review"],
         help="Maintenance task to perform",
     )
     parser.add_argument("--yes", "-y", action="store_true", help="Auto-accept changes without prompting")
+    parser.add_argument("--max-per-run", type=int, default=DEFAULT_MAX_PER_RUN, help="Max tools to review")
+    parser.add_argument("--slug", dest="slugs", action="append", default=[], help="Specific slug to review; repeatable")
+    parser.add_argument(
+        "--stale-after-days",
+        type=int,
+        default=DEFAULT_STALE_AFTER_DAYS,
+        help="Re-review age threshold in days",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Review without persisting changes")
+    parser.add_argument("--force", action="store_true", help="Review selected candidates even if fresh")
+    parser.add_argument("--no-web-search", dest="use_web_search", action="store_false", default=True)
+    parser.add_argument("--json-output", action="store_true", help="Print structured JSON output")
+    return parser
 
-    args = parser.parse_args()
-    setup_logging()
 
+def dispatch_task(args: argparse.Namespace) -> None:
+    """Dispatch parsed CLI arguments to the right maintenance task."""
     if args.task == "deduplicate":
         asyncio.run(deduplicate_database())
     elif args.task == "recategorize":
@@ -316,3 +378,25 @@ if __name__ == "__main__":
         asyncio.run(tier_database())
     elif args.task == "tier-traffic":
         asyncio.run(tier_database_with_traffic())
+    elif args.task == "editorial-review":
+        editorial_review_database(
+            max_per_run=args.max_per_run,
+            slugs=args.slugs,
+            stale_after_days=args.stale_after_days,
+            dry_run=args.dry_run,
+            force=args.force,
+            use_web_search=args.use_web_search,
+            json_output=args.json_output,
+        )
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Run the maintenance CLI."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    setup_logging()
+    dispatch_task(args)
+
+
+if __name__ == "__main__":
+    main()
