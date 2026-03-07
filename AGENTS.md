@@ -7,6 +7,8 @@ AI Tools directory at drose.io/aitools - catalog of 535+ AI tools with categorie
 - **Storage**: MinIO for sitemaps, tools.json persisted in container volume
 
 Deployed to clifford VPS via Coolify.
+- **LiteLLM from containers:** use `http://litellm-proxy:4000`, not the public `https://llm.drose.io` hostname.
+- **Listings cache:** the web process keeps an in-memory tools cache; after MinIO edits, hit the homepage or redeploy to refresh public listings.
 
 ## Scheduled Jobs
 
