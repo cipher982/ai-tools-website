@@ -8,8 +8,84 @@ os.environ["BASE_PATH"] = "/aitools"
 import pytest  # noqa: E402
 from starlette.testclient import TestClient  # noqa: E402
 
+from ai_tools_website.v1 import web as web_module  # noqa: E402
 from ai_tools_website.v1.web import app  # noqa: E402
 from ai_tools_website.v1.web import get_canonical_url  # noqa: E402
+
+
+@pytest.fixture
+def editorial_dataset():
+    return {
+        "tools": [
+            {
+                "id": "keep-1",
+                "name": "Visible Tool",
+                "slug": "visible-tool",
+                "category": "Developer Tools",
+                "description": "A legitimate tool that should stay public.",
+                "url": "https://example.com/visible-tool",
+                "action": "keep",
+                "comparisons": {
+                    "visible_tool_vs_other_tool": {
+                        "slug": "visible-tool-vs-other-tool",
+                        "title": "Visible Tool vs Other Tool",
+                        "meta_description": "Visible comparison.",
+                    }
+                },
+            },
+            {
+                "id": "noindex-1",
+                "name": "Quiet Tool",
+                "slug": "quiet-tool",
+                "category": "Developer Tools",
+                "description": "A real tool that should remain public but unlisted.",
+                "url": "https://example.com/quiet-tool",
+                "action": "noindex",
+                "comparisons": {
+                    "quiet_tool_vs_other_tool": {
+                        "slug": "quiet-tool-vs-other-tool",
+                        "title": "Quiet Tool vs Other Tool",
+                        "meta_description": "Quiet comparison.",
+                    }
+                },
+            },
+            {
+                "id": "delete-1",
+                "name": "Deleted Tool",
+                "slug": "deleted-tool",
+                "category": "Developer Tools",
+                "description": "This should not be publicly accessible.",
+                "url": "https://example.com/deleted-tool",
+                "action": "delete",
+            },
+            {
+                "id": "review-1",
+                "name": "Review Tool",
+                "slug": "review-tool",
+                "category": "Developer Tools",
+                "description": "This should stay hidden until reviewed.",
+                "url": "https://example.com/review-tool",
+                "action": "needs_review",
+            },
+            {
+                "id": "legacy-1",
+                "name": "Legacy Tool",
+                "slug": "legacy-tool",
+                "category": "Workflow Tools",
+                "description": "Legacy records should still default to keep.",
+                "url": "https://example.com/legacy-tool",
+            },
+        ]
+    }
+
+
+@pytest.fixture
+def editorial_client(monkeypatch, editorial_dataset):
+    web_module.tools_cache.clear()
+    monkeypatch.setattr(web_module, "load_tools", lambda: editorial_dataset)
+    client = TestClient(app, raise_server_exceptions=False)
+    yield client
+    web_module.tools_cache.clear()
 
 
 class TestCanonicalUrl:
@@ -103,3 +179,42 @@ class TestRoutes:
         response = client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
+
+
+class TestEditorialVisibility:
+    def test_homepage_shows_only_indexable_tools(self, editorial_client):
+        response = editorial_client.get("/")
+        assert response.status_code == 200
+        assert "Visible Tool" in response.text
+        assert "Legacy Tool" in response.text
+        assert "Quiet Tool" not in response.text
+        assert "Deleted Tool" not in response.text
+        assert "Review Tool" not in response.text
+
+    def test_category_page_hides_noindex_and_hidden_tools(self, editorial_client):
+        response = editorial_client.get("/category/developer-tools")
+        assert response.status_code == 200
+        assert "Visible Tool" in response.text
+        assert "Quiet Tool" not in response.text
+        assert "Deleted Tool" not in response.text
+        assert "Review Tool" not in response.text
+
+    def test_noindex_tool_page_stays_public_with_noindex_meta(self, editorial_client):
+        response = editorial_client.get("/tools/quiet-tool")
+        assert response.status_code == 200
+        assert 'content="noindex,follow"' in response.text
+        assert "Quiet Tool - AI Developer Tools Tool" in response.text
+
+    def test_deleted_tool_page_returns_404(self, editorial_client):
+        response = editorial_client.get("/tools/deleted-tool")
+        assert response.status_code == 404
+
+    def test_needs_review_tool_page_returns_404(self, editorial_client):
+        response = editorial_client.get("/tools/review-tool")
+        assert response.status_code == 404
+
+    def test_comparisons_hub_hides_unlisted_tool_comparisons(self, editorial_client):
+        response = editorial_client.get("/comparisons")
+        assert response.status_code == 200
+        assert "Visible Tool vs Other Tool" in response.text
+        assert "Quiet Tool vs Other Tool" not in response.text

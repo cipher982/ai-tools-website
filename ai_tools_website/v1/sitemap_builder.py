@@ -22,6 +22,7 @@ from minio.error import S3Error
 from ai_tools_website.v1.data_manager import BUCKET_NAME
 from ai_tools_website.v1.data_manager import get_minio_client
 from ai_tools_website.v1.data_manager import load_tools
+from ai_tools_website.v1.editorial import is_indexable_tool
 from ai_tools_website.v1.seo_utils import generate_category_slug
 from ai_tools_website.v1.seo_utils import generate_comparison_slug
 from ai_tools_website.v1.seo_utils import generate_tool_slug
@@ -179,8 +180,9 @@ def _build_comparison_entries(tools: List[Dict[str, Dict]], base_url: str) -> Li
 def build_sitemaps(tools_data: Dict[str, Dict], base_url: str) -> Dict[str, bytes]:
     """Build sitemap XML blobs for all sections."""
     normalized_base = base_url.rstrip("/")
-    tools = tools_data.get("tools", [])
+    tools = [tool for tool in tools_data.get("tools", []) if is_indexable_tool(tool)]
     category_metadata = tools_data.get("category_metadata") or {}
+    visible_category_slugs = {generate_category_slug(tool.get("category", "Other")) for tool in tools}
 
     if not category_metadata:
         provisional: Dict[str, Dict] = {}
@@ -190,6 +192,12 @@ def build_sitemaps(tools_data: Dict[str, Dict], base_url: str) -> Dict[str, byte
             entry = provisional.setdefault(slug, {"name": name, "slug": slug, "last_rebuilt_at": None})
             entry["last_rebuilt_at"] = _choose_lastmod(entry.get("last_rebuilt_at"), tool.get("last_reviewed_at"))
         category_metadata = provisional
+    else:
+        category_metadata = {
+            key: value
+            for key, value in category_metadata.items()
+            if (value.get("slug") or generate_category_slug(value.get("name", ""))) in visible_category_slugs
+        }
 
     static_entries = _build_static_entries(normalized_base)
     tool_entries = _build_tool_entries(tools, normalized_base)

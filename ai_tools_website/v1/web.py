@@ -45,6 +45,9 @@ from starlette.responses import RedirectResponse
 from ai_tools_website.v1.cron_utils import calculate_next_run
 from ai_tools_website.v1.cron_utils import get_cron_schedules
 from ai_tools_website.v1.data_manager import load_tools
+from ai_tools_website.v1.editorial import get_tool_noindex_status
+from ai_tools_website.v1.editorial import is_indexable_tool
+from ai_tools_website.v1.editorial import is_public_tool
 from ai_tools_website.v1.logging_config import setup_logging
 from ai_tools_website.v1.pipeline_analytics import calculate_health_score
 from ai_tools_website.v1.pipeline_analytics import filter_outcome_metrics
@@ -118,6 +121,11 @@ def url(path: str) -> str:
     return f"{BASE_PATH}{path}"
 
 
+def html_response(document, *, status_code: int = 200) -> Response:
+    """Render a FastHTML document with an explicit HTTP status code."""
+    return Response(str(document), media_type="text/html", status_code=status_code)
+
+
 class TrailingSlashMiddleware(BaseHTTPMiddleware):
     """Redirect trailing-slash URLs to non-trailing-slash with proper BASE_PATH and HTTPS.
 
@@ -145,6 +153,8 @@ def get_tools_by_category() -> Dict:
         tools = load_tools()
         by_category = {}
         for tool in tools["tools"]:
+            if not is_public_tool(tool):
+                continue
             category = tool.get("category", "Other")
             by_category.setdefault(category, []).append(tool)
         tools_cache.update(by_category)
@@ -158,6 +168,8 @@ async def refresh_tools_background():
     tools = load_tools()
     by_category = {}
     for tool in tools["tools"]:
+        if not is_public_tool(tool):
+            continue
         category = tool.get("category", "Other")
         by_category.setdefault(category, []).append(tool)
     tools_cache.clear()
@@ -170,6 +182,24 @@ def get_all_tools() -> list:
     tools_by_category = get_tools_by_category()
     all_tools = []
     for tools in tools_by_category.values():
+        all_tools.extend(tools)
+    return all_tools
+
+
+def get_listed_tools_by_category() -> Dict:
+    """Get tools that should appear in public listings."""
+    listed_by_category = {}
+    for category, tools in get_tools_by_category().items():
+        listed = [tool for tool in tools if is_indexable_tool(tool)]
+        if listed:
+            listed_by_category[category] = listed
+    return listed_by_category
+
+
+def get_all_listed_tools() -> list:
+    """Get flat list of tools that should appear in public listings."""
+    all_tools = []
+    for tools in get_listed_tools_by_category().values():
         all_tools.extend(tools)
     return all_tools
 
@@ -193,7 +223,7 @@ def find_tool_by_slug(slug: str) -> dict:
 
 def get_tools_for_category(category_slug: str) -> list:
     """Get tools for a specific category by slug"""
-    tools_by_category = get_tools_by_category()
+    tools_by_category = get_listed_tools_by_category()
     for category, tools in tools_by_category.items():
         if generate_category_slug(category) == category_slug:
             return tools, category
@@ -250,7 +280,7 @@ def find_comparison_by_slug(slug: str) -> tuple[dict, str, str]:
 
 def get_all_comparisons() -> list:
     """Get all available comparisons across all tools"""
-    all_tools = get_all_tools()
+    all_tools = get_all_listed_tools()
     comparisons = []
     seen_keys = set()
 
@@ -682,15 +712,6 @@ def render_tool_sections_v2(tool: dict) -> list:
         )
 
     return blocks
-
-
-def get_tool_noindex_status(tool: dict) -> bool:
-    """Check if a tool should have noindex meta tag."""
-    enhanced_v2 = tool.get("enhanced_content_v2") or {}
-    tier = enhanced_v2.get("tier") or tool.get("_tier")
-    if tier == "noindex":
-        return True
-    return tool.get("noindex") is True
 
 
 def get_screenshot_url(tool: dict) -> str | None:
@@ -1313,7 +1334,7 @@ async def pipeline_status():
 
 @rt("/")
 async def get():
-    tools_by_category = get_tools_by_category()
+    tools_by_category = get_listed_tools_by_category()
     sections = [category_section(cat, tools, use_internal_links=True) for cat, tools in tools_by_category.items()]
 
     # Trigger background refresh
@@ -1385,9 +1406,10 @@ async def get_tool_page(slug: str):
     """Individual tool page with SEO optimization"""
     tool = find_tool_by_slug(slug)
     if not tool:
-        return Html(
-            Head(Title("Tool Not Found")), Body(H1("Tool Not Found"), P(f"No tool found with slug: {slug}"))
-        ), 404
+        return html_response(
+            Html(Head(Title("Tool Not Found")), Body(H1("Tool Not Found"), P(f"No tool found with slug: {slug}"))),
+            status_code=404,
+        )
 
     base_url = get_base_url()
     pricing = tool.get("pricing")
@@ -1413,7 +1435,7 @@ async def get_tool_page(slug: str):
 
     # Find related tools (same category)
     category = tool.get("category", "Other")
-    tools_by_category = get_tools_by_category()
+    tools_by_category = get_listed_tools_by_category()
     related_tools = [t for t in tools_by_category.get(category, []) if get_tool_slug(t) != slug][:6]
     content_blocks = render_tool_sections(tool)
 
@@ -1568,9 +1590,13 @@ async def get_comparison_page(slug: str):
     """Comparison page with SEO optimization"""
     comparison, tool1_name, tool2_name = find_comparison_by_slug(slug)
     if not comparison or not tool1_name or not tool2_name:
-        return Html(
-            Head(Title("Comparison Not Found")), Body(H1("Comparison Not Found"), P(f"No comparison found for: {slug}"))
-        ), 404
+        return html_response(
+            Html(
+                Head(Title("Comparison Not Found")),
+                Body(H1("Comparison Not Found"), P(f"No comparison found for: {slug}")),
+            ),
+            status_code=404,
+        )
 
     base_url = get_base_url()
     title, meta_desc = generate_comparison_meta(
@@ -1661,9 +1687,13 @@ async def get_category_page(category_slug: str):
     """Category hub page with SEO optimization"""
     tools, category_name = get_tools_for_category(category_slug)
     if not tools:
-        return Html(
-            Head(Title("Category Not Found")), Body(H1("Category Not Found"), P(f"No category found: {category_slug}"))
-        ), 404
+        return html_response(
+            Html(
+                Head(Title("Category Not Found")),
+                Body(H1("Category Not Found"), P(f"No category found: {category_slug}")),
+            ),
+            status_code=404,
+        )
 
     base_url = get_base_url()
     meta_title = f"Best AI {category_name} Tools - Complete Guide & Reviews"
@@ -1741,11 +1771,11 @@ async def get_sitemap_file(filename: str):
     """Serve individual sitemap documents."""
     sanitized = filename.strip("/")
     if sanitized not in ALLOWED_SITEMAP_FILES:
-        return Html(Body(H1("Not Found"), P("Sitemap not available."))), 404
+        return html_response(Html(Body(H1("Not Found"), P("Sitemap not available."))), status_code=404)
 
     content = _fetch_local_sitemap(sanitized)
     if content is None:
-        return Html(Body(H1("Not Found"), P("Sitemap not available."))), 404
+        return html_response(Html(Body(H1("Not Found"), P("Sitemap not available."))), status_code=404)
 
     return Response(content, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
 
