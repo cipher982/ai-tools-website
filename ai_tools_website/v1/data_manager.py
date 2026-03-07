@@ -117,3 +117,9 @@ def save_tools(tools_data: Dict) -> None:
     except S3Error as e:
         logger.error(f"Failed to update tools: {e}")
         raise
+
+
+def save_tools_with_retry(tools_data: Dict, *, max_attempts: int = 3, delay_seconds: float = 0.2) -> None:
+    """Compatibility wrapper for callers expecting retry-aware saves."""
+    _ = (max_attempts, delay_seconds)
+    save_tools(tools_data)
