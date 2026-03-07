@@ -70,11 +70,22 @@ def test_resolve_editorial_review_model_falls_back_to_content_enhancer(monkeypat
     assert resolve_editorial_review_model() == "glm-content"
 
 
-def test_editorial_review_schema_forbids_additional_properties():
+def test_editorial_review_schema_matches_openai_strict_requirements():
     schema = EditorialReview.model_json_schema()
 
     assert schema["type"] == "object"
     assert schema["additionalProperties"] is False
+    assert schema["required"] == [
+        "action",
+        "why",
+        "ideal_user",
+        "not_for",
+        "decision_value",
+        "page_angle",
+        "suggested_sections",
+        "comparison_candidates",
+        "confidence",
+    ]
 
 
 def test_request_editorial_review_uses_structured_outputs(sample_tool):

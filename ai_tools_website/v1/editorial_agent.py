@@ -27,12 +27,12 @@ class EditorialReview(BaseModel):
 
     action: EditorialAction
     why: str
-    ideal_user: str | None = None
-    not_for: str | None = None
-    decision_value: list[str] = Field(default_factory=list)
-    page_angle: str | None = None
-    suggested_sections: list[str] = Field(default_factory=list)
-    comparison_candidates: list[str] = Field(default_factory=list)
+    ideal_user: str | None
+    not_for: str | None
+    decision_value: list[str]
+    page_angle: str | None
+    suggested_sections: list[str]
+    comparison_candidates: list[str]
     confidence: float = Field(ge=0.0, le=1.0)
 
 
