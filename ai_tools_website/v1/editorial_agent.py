@@ -18,6 +18,7 @@ from ai_tools_website.v1.openai_utils import extract_responses_api_text
 from ai_tools_website.v1.openai_utils import parse_json_response
 
 EditorialAction = Literal["keep", "noindex", "delete", "needs_review"]
+DEFAULT_EDITORIAL_METADATA_SOURCE = "ai-tools:editorial-review"
 
 
 class EditorialReview(BaseModel):
@@ -69,6 +70,22 @@ def resolve_editorial_review_model() -> str:
     return model
 
 
+def resolve_editorial_metadata_source() -> str:
+    """Resolve the metadata source required by the LiteLLM proxy."""
+    return os.getenv("EDITORIAL_METADATA_SOURCE") or DEFAULT_EDITORIAL_METADATA_SOURCE
+
+
+def resolve_editorial_client_kwargs() -> dict[str, str]:
+    """Resolve editorial-specific OpenAI client kwargs with safe fallbacks."""
+    client_kwargs: dict[str, str] = {
+        "api_key": os.getenv("EDITORIAL_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+    }
+    base_url = os.getenv("EDITORIAL_OPENAI_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    return client_kwargs
+
+
 def build_editorial_review_context(tool: dict[str, Any]) -> dict[str, Any]:
     """Trim a tool record down to the fields worth sending to the reviewer."""
     context = {
@@ -108,6 +125,7 @@ def request_editorial_review(
     request_kwargs: dict[str, Any] = {
         "model": resolved_model,
         "instructions": EDITORIAL_REVIEW_SYSTEM_PROMPT,
+        "metadata": {"source": resolve_editorial_metadata_source()},
         "input": [
             {
                 "role": "user",
@@ -149,11 +167,7 @@ def review_tool(
     if client is None:
         from openai import OpenAI
 
-        client_kwargs: dict[str, Any] = {"api_key": os.getenv("OPENAI_API_KEY")}
-        base_url = os.getenv("OPENAI_BASE_URL")
-        if base_url:
-            client_kwargs["base_url"] = base_url
-        client = OpenAI(**client_kwargs)
+        client = OpenAI(**resolve_editorial_client_kwargs())
     return request_editorial_review(client, tool, model=model, use_web_search=use_web_search)
 
 

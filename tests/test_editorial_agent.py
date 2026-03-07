@@ -3,12 +3,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from ai_tools_website.v1.editorial_agent import DEFAULT_EDITORIAL_METADATA_SOURCE
 from ai_tools_website.v1.editorial_agent import EDITORIAL_REVIEW_SYSTEM_PROMPT
 from ai_tools_website.v1.editorial_agent import EditorialReview
 from ai_tools_website.v1.editorial_agent import apply_editorial_review
 from ai_tools_website.v1.editorial_agent import build_editorial_review_context
 from ai_tools_website.v1.editorial_agent import build_editorial_review_user_prompt
 from ai_tools_website.v1.editorial_agent import request_editorial_review
+from ai_tools_website.v1.editorial_agent import resolve_editorial_client_kwargs
+from ai_tools_website.v1.editorial_agent import resolve_editorial_metadata_source
 from ai_tools_website.v1.editorial_agent import resolve_editorial_review_model
 from ai_tools_website.v1.editorial_agent import review_tool
 
@@ -71,6 +74,40 @@ def test_resolve_editorial_review_model_falls_back_to_content_enhancer(monkeypat
     assert resolve_editorial_review_model() == "glm-content"
 
 
+def test_resolve_editorial_metadata_source_defaults(monkeypatch):
+    monkeypatch.delenv("EDITORIAL_METADATA_SOURCE", raising=False)
+    assert resolve_editorial_metadata_source() == DEFAULT_EDITORIAL_METADATA_SOURCE
+
+
+def test_resolve_editorial_metadata_source_prefers_env(monkeypatch):
+    monkeypatch.setenv("EDITORIAL_METADATA_SOURCE", "ai-tools:test-editorial")
+    assert resolve_editorial_metadata_source() == "ai-tools:test-editorial"
+
+
+def test_resolve_editorial_client_kwargs_prefers_editorial_env(monkeypatch):
+    monkeypatch.setenv("EDITORIAL_OPENAI_API_KEY", "editorial-key")
+    monkeypatch.setenv("EDITORIAL_OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setenv("OPENAI_API_KEY", "global-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+    assert resolve_editorial_client_kwargs() == {
+        "api_key": "editorial-key",
+        "base_url": "https://llm.drose.io",
+    }
+
+
+def test_resolve_editorial_client_kwargs_falls_back_to_global_env(monkeypatch):
+    monkeypatch.delenv("EDITORIAL_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("EDITORIAL_OPENAI_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "global-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+    assert resolve_editorial_client_kwargs() == {
+        "api_key": "global-key",
+        "base_url": "https://api.openai.com/v1",
+    }
+
+
 def test_editorial_review_schema_matches_openai_strict_requirements():
     schema = EditorialReview.model_json_schema()
 
@@ -109,8 +146,30 @@ def test_request_editorial_review_uses_structured_outputs(sample_tool):
     assert review.action == "keep"
     assert client.responses.last_kwargs["model"] == "glm-5"
     assert client.responses.last_kwargs["instructions"] == EDITORIAL_REVIEW_SYSTEM_PROMPT
+    assert client.responses.last_kwargs["metadata"] == {"source": DEFAULT_EDITORIAL_METADATA_SOURCE}
     assert client.responses.last_kwargs["tools"] == [{"type": "web_search"}]
     assert client.responses.last_kwargs["text"]["format"]["type"] == "json_schema"
+
+
+def test_request_editorial_review_respects_metadata_source_env(sample_tool, monkeypatch):
+    payload = {
+        "action": "keep",
+        "why": "Legitimate open-source coding agent with clear builder value.",
+        "ideal_user": "Developers who want a self-hostable coding assistant.",
+        "not_for": "Non-technical users who want a fully managed product.",
+        "decision_value": ["Open source", "Multi-model support"],
+        "page_angle": "The open-source coding agent for developers who want control.",
+        "suggested_sections": ["Why choose it", "Alternatives"],
+        "comparison_candidates": ["Aider", "Claude Code"],
+        "confidence": 0.84,
+    }
+    client = _FakeClient(json.dumps(payload))
+    monkeypatch.setenv("EDITORIAL_METADATA_SOURCE", "ai-tools:staging-editorial")
+
+    request_editorial_review(client, sample_tool, model="glm-5", use_web_search=False)
+
+    assert client.responses.last_kwargs["metadata"] == {"source": "ai-tools:staging-editorial"}
+    assert "tools" not in client.responses.last_kwargs
 
 
 def test_request_editorial_review_can_skip_web_search(sample_tool):
@@ -139,7 +198,7 @@ def test_request_editorial_review_raises_on_invalid_json(sample_tool):
         request_editorial_review(client, sample_tool, model="glm-5")
 
 
-def test_review_tool_uses_openai_base_url_when_present(sample_tool, monkeypatch):
+def test_review_tool_prefers_editorial_client_env(monkeypatch, sample_tool):
     captured = {}
 
     class DummyOpenAI:
@@ -164,8 +223,10 @@ def test_review_tool_uses_openai_base_url_when_present(sample_tool, monkeypatch)
         captured["use_web_search"] = use_web_search
         return expected
 
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setenv("EDITORIAL_OPENAI_API_KEY", "editorial-key")
+    monkeypatch.setenv("EDITORIAL_OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setenv("OPENAI_API_KEY", "global-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     monkeypatch.setattr("openai.OpenAI", DummyOpenAI)
     monkeypatch.setattr("ai_tools_website.v1.editorial_agent.request_editorial_review", fake_request)
 
@@ -173,14 +234,14 @@ def test_review_tool_uses_openai_base_url_when_present(sample_tool, monkeypatch)
 
     assert review == expected
     assert captured["client_kwargs"] == {
-        "api_key": "test-key",
+        "api_key": "editorial-key",
         "base_url": "https://llm.drose.io",
     }
     assert captured["model"] == "glm-5"
     assert captured["use_web_search"] is False
 
 
-def test_review_tool_skips_base_url_when_unset(sample_tool, monkeypatch):
+def test_review_tool_falls_back_to_global_client_env(monkeypatch, sample_tool):
     captured = {}
 
     class DummyOpenAI:
@@ -199,8 +260,10 @@ def test_review_tool_skips_base_url_when_unset(sample_tool, monkeypatch):
         confidence=0.7,
     )
 
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("EDITORIAL_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("EDITORIAL_OPENAI_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "global-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.drose.io")
     monkeypatch.setattr("openai.OpenAI", DummyOpenAI)
     monkeypatch.setattr(
         "ai_tools_website.v1.editorial_agent.request_editorial_review",
@@ -210,7 +273,10 @@ def test_review_tool_skips_base_url_when_unset(sample_tool, monkeypatch):
     review = review_tool(sample_tool, model="glm-5")
 
     assert review == expected
-    assert captured["client_kwargs"] == {"api_key": "test-key"}
+    assert captured["client_kwargs"] == {
+        "api_key": "global-key",
+        "base_url": "https://llm.drose.io",
+    }
 
 
 def test_apply_editorial_review_merges_nested_and_root_fields(sample_tool):
