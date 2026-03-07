@@ -3,7 +3,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from ai_tools_website.v1.editorial_agent import DEFAULT_EDITORIAL_MAX_RETRIES
 from ai_tools_website.v1.editorial_agent import DEFAULT_EDITORIAL_METADATA_SOURCE
+from ai_tools_website.v1.editorial_agent import DEFAULT_EDITORIAL_REQUEST_TIMEOUT_SECONDS
 from ai_tools_website.v1.editorial_agent import EDITORIAL_REVIEW_SYSTEM_PROMPT
 from ai_tools_website.v1.editorial_agent import EditorialReview
 from ai_tools_website.v1.editorial_agent import apply_editorial_review
@@ -11,7 +13,9 @@ from ai_tools_website.v1.editorial_agent import build_editorial_review_context
 from ai_tools_website.v1.editorial_agent import build_editorial_review_user_prompt
 from ai_tools_website.v1.editorial_agent import request_editorial_review
 from ai_tools_website.v1.editorial_agent import resolve_editorial_client_kwargs
+from ai_tools_website.v1.editorial_agent import resolve_editorial_max_retries
 from ai_tools_website.v1.editorial_agent import resolve_editorial_metadata_source
+from ai_tools_website.v1.editorial_agent import resolve_editorial_request_timeout_seconds
 from ai_tools_website.v1.editorial_agent import resolve_editorial_review_model
 from ai_tools_website.v1.editorial_agent import review_tool
 
@@ -84,27 +88,51 @@ def test_resolve_editorial_metadata_source_prefers_env(monkeypatch):
     assert resolve_editorial_metadata_source() == "ai-tools:test-editorial"
 
 
+def test_resolve_editorial_request_timeout_defaults(monkeypatch):
+    monkeypatch.delenv("EDITORIAL_REQUEST_TIMEOUT_SECONDS", raising=False)
+    assert resolve_editorial_request_timeout_seconds() == DEFAULT_EDITORIAL_REQUEST_TIMEOUT_SECONDS
+
+
+def test_resolve_editorial_request_timeout_prefers_env(monkeypatch):
+    monkeypatch.setenv("EDITORIAL_REQUEST_TIMEOUT_SECONDS", "12.5")
+    assert resolve_editorial_request_timeout_seconds() == 12.5
+
+
+def test_resolve_editorial_max_retries_defaults(monkeypatch):
+    monkeypatch.delenv("EDITORIAL_OPENAI_MAX_RETRIES", raising=False)
+    assert resolve_editorial_max_retries() == DEFAULT_EDITORIAL_MAX_RETRIES
+
+
+def test_resolve_editorial_max_retries_prefers_env(monkeypatch):
+    monkeypatch.setenv("EDITORIAL_OPENAI_MAX_RETRIES", "1")
+    assert resolve_editorial_max_retries() == 1
+
+
 def test_resolve_editorial_client_kwargs_prefers_editorial_env(monkeypatch):
     monkeypatch.setenv("EDITORIAL_OPENAI_API_KEY", "editorial-key")
     monkeypatch.setenv("EDITORIAL_OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setenv("EDITORIAL_OPENAI_MAX_RETRIES", "1")
     monkeypatch.setenv("OPENAI_API_KEY", "global-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
     assert resolve_editorial_client_kwargs() == {
         "api_key": "editorial-key",
         "base_url": "https://llm.drose.io",
+        "max_retries": 1,
     }
 
 
 def test_resolve_editorial_client_kwargs_falls_back_to_global_env(monkeypatch):
     monkeypatch.delenv("EDITORIAL_OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("EDITORIAL_OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("EDITORIAL_OPENAI_MAX_RETRIES", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "global-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
     assert resolve_editorial_client_kwargs() == {
         "api_key": "global-key",
         "base_url": "https://api.openai.com/v1",
+        "max_retries": 0,
     }
 
 
@@ -147,6 +175,7 @@ def test_request_editorial_review_uses_structured_outputs(sample_tool):
     assert client.responses.last_kwargs["model"] == "glm-5"
     assert client.responses.last_kwargs["instructions"] == EDITORIAL_REVIEW_SYSTEM_PROMPT
     assert client.responses.last_kwargs["metadata"] == {"source": DEFAULT_EDITORIAL_METADATA_SOURCE}
+    assert client.responses.last_kwargs["timeout"] == DEFAULT_EDITORIAL_REQUEST_TIMEOUT_SECONDS
     assert client.responses.last_kwargs["tools"] == [{"type": "web_search"}]
     assert client.responses.last_kwargs["text"]["format"]["type"] == "json_schema"
 
@@ -165,10 +194,12 @@ def test_request_editorial_review_respects_metadata_source_env(sample_tool, monk
     }
     client = _FakeClient(json.dumps(payload))
     monkeypatch.setenv("EDITORIAL_METADATA_SOURCE", "ai-tools:staging-editorial")
+    monkeypatch.setenv("EDITORIAL_REQUEST_TIMEOUT_SECONDS", "9")
 
     request_editorial_review(client, sample_tool, model="glm-5", use_web_search=False)
 
     assert client.responses.last_kwargs["metadata"] == {"source": "ai-tools:staging-editorial"}
+    assert client.responses.last_kwargs["timeout"] == 9.0
     assert "tools" not in client.responses.last_kwargs
 
 
@@ -225,6 +256,7 @@ def test_review_tool_prefers_editorial_client_env(monkeypatch, sample_tool):
 
     monkeypatch.setenv("EDITORIAL_OPENAI_API_KEY", "editorial-key")
     monkeypatch.setenv("EDITORIAL_OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setenv("EDITORIAL_OPENAI_MAX_RETRIES", "1")
     monkeypatch.setenv("OPENAI_API_KEY", "global-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     monkeypatch.setattr("openai.OpenAI", DummyOpenAI)
@@ -236,6 +268,7 @@ def test_review_tool_prefers_editorial_client_env(monkeypatch, sample_tool):
     assert captured["client_kwargs"] == {
         "api_key": "editorial-key",
         "base_url": "https://llm.drose.io",
+        "max_retries": 1,
     }
     assert captured["model"] == "glm-5"
     assert captured["use_web_search"] is False
@@ -262,6 +295,7 @@ def test_review_tool_falls_back_to_global_client_env(monkeypatch, sample_tool):
 
     monkeypatch.delenv("EDITORIAL_OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("EDITORIAL_OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("EDITORIAL_OPENAI_MAX_RETRIES", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "global-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.drose.io")
     monkeypatch.setattr("openai.OpenAI", DummyOpenAI)
@@ -276,6 +310,7 @@ def test_review_tool_falls_back_to_global_client_env(monkeypatch, sample_tool):
     assert captured["client_kwargs"] == {
         "api_key": "global-key",
         "base_url": "https://llm.drose.io",
+        "max_retries": 0,
     }
 
 

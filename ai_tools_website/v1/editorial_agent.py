@@ -19,6 +19,8 @@ from ai_tools_website.v1.openai_utils import parse_json_response
 
 EditorialAction = Literal["keep", "noindex", "delete", "needs_review"]
 DEFAULT_EDITORIAL_METADATA_SOURCE = "ai-tools:editorial-review"
+DEFAULT_EDITORIAL_REQUEST_TIMEOUT_SECONDS = 60.0
+DEFAULT_EDITORIAL_MAX_RETRIES = 0
 
 
 class EditorialReview(BaseModel):
@@ -75,10 +77,27 @@ def resolve_editorial_metadata_source() -> str:
     return os.getenv("EDITORIAL_METADATA_SOURCE") or DEFAULT_EDITORIAL_METADATA_SOURCE
 
 
-def resolve_editorial_client_kwargs() -> dict[str, str]:
+def resolve_editorial_request_timeout_seconds() -> float:
+    """Resolve the per-request timeout for editorial reviews."""
+    raw = os.getenv("EDITORIAL_REQUEST_TIMEOUT_SECONDS")
+    if not raw:
+        return DEFAULT_EDITORIAL_REQUEST_TIMEOUT_SECONDS
+    return float(raw)
+
+
+def resolve_editorial_max_retries() -> int:
+    """Resolve the retry policy for editorial review requests."""
+    raw = os.getenv("EDITORIAL_OPENAI_MAX_RETRIES")
+    if raw is None:
+        return DEFAULT_EDITORIAL_MAX_RETRIES
+    return int(raw)
+
+
+def resolve_editorial_client_kwargs() -> dict[str, Any]:
     """Resolve editorial-specific OpenAI client kwargs with safe fallbacks."""
-    client_kwargs: dict[str, str] = {
-        "api_key": os.getenv("EDITORIAL_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+    client_kwargs: dict[str, Any] = {
+        "api_key": os.getenv("EDITORIAL_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY") or "",
+        "max_retries": resolve_editorial_max_retries(),
     }
     base_url = os.getenv("EDITORIAL_OPENAI_BASE_URL") or os.getenv("OPENAI_BASE_URL")
     if base_url:
@@ -126,6 +145,7 @@ def request_editorial_review(
         "model": resolved_model,
         "instructions": EDITORIAL_REVIEW_SYSTEM_PROMPT,
         "metadata": {"source": resolve_editorial_metadata_source()},
+        "timeout": resolve_editorial_request_timeout_seconds(),
         "input": [
             {
                 "role": "user",
