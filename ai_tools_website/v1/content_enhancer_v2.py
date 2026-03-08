@@ -35,7 +35,7 @@ from .data_aggregators import fetch_pypi_stats
 from .data_aggregators.package_aggregator import extract_npm_package
 from .data_aggregators.package_aggregator import extract_pypi_package
 from .data_manager import load_tools
-from .data_manager import save_tools
+from .data_manager import save_tools_with_retry
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import CONTENT_ENHANCER_MODEL
@@ -485,7 +485,7 @@ def enhance_tools_v2(
     use_llm_classifier: bool = True,
 ) -> None:
     """Main function to run the v2 enhancement pipeline."""
-    with pipeline_summary("enhancement_v2") as summary:
+    with pipeline_summary("enhancement") as summary:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
         tools_doc = load_tools()
@@ -493,6 +493,7 @@ def enhance_tools_v2(
 
         # LLM classifier is default; falls back to rules on API errors
 
+        summary.add_attribute("pipeline_version", "v2")
         summary.add_attribute("dry_run", dry_run)
         summary.add_attribute("force", force)
         summary.add_attribute("target_tier", target_tier)
@@ -559,7 +560,7 @@ def enhance_tools_v2(
         updated_count, skipped_count, failed_count = asyncio.run(_process_tools())
 
         if updated_count and not dry_run:
-            save_tools(tools_doc)
+            save_tools_with_retry(tools_doc)
             logger.info(f"Saved enhanced content for {updated_count} tools")
         elif updated_count:
             logger.info(f"Dry run: {updated_count} tools would have been updated")
