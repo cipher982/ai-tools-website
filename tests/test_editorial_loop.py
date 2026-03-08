@@ -3,6 +3,7 @@ from datetime import timezone
 
 from ai_tools_website.v1.editorial_agent import EditorialReview
 from ai_tools_website.v1.editorial_loop import DEFAULT_PRUNE_CONFIDENCE
+from ai_tools_website.v1.editorial_loop import find_suspicious_keywords
 from ai_tools_website.v1.editorial_loop import run_editorial_loop
 from ai_tools_website.v1.editorial_loop import select_tools_for_editorial_loop
 
@@ -19,6 +20,46 @@ def _tierer(tools):
         tool.setdefault("_tier", "tier2" if index == 0 else "tier3")
         tool.setdefault("_importance_score", 90 - index)
     return {"tier1": [], "tier2": [], "tier3": tools, "noindex": []}
+
+
+def test_find_suspicious_keywords_ignores_partial_word_false_positives():
+    assert (
+        find_suspicious_keywords(
+            {
+                "name": "Vercel AI Chatbot",
+                "description": "A full-featured, hackable chatbot framework.",
+                "url": "https://github.com/vercel/ai-chatbot",
+            }
+        )
+        == []
+    )
+    assert (
+        find_suspicious_keywords(
+            {
+                "name": "Grok 3 ai",
+                "description": "Flagship reasoning model.",
+                "url": "https://huggingface.co/blog/LLMhacker/grok-3-ai",
+            }
+        )
+        == []
+    )
+
+
+def test_find_suspicious_keywords_matches_real_risky_terms():
+    assert find_suspicious_keywords(
+        {
+            "name": "Open-Aimbot",
+            "description": "Silent aim cheat with bypass support.",
+            "url": "https://github.com/example/open-aimbot",
+        }
+    ) == ["aimbot", "cheat", "bypass"]
+    assert find_suspicious_keywords(
+        {
+            "name": "Aviator Prediction App",
+            "description": "Betting predictor for aviator players.",
+            "url": "https://example.com/aviator-prediction",
+        }
+    ) == ["aviator", "betting", "predictor", "prediction"]
 
 
 def test_select_tools_for_editorial_loop_prioritizes_suspicious_and_missing_editorial():

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from dataclasses import asdict
 from dataclasses import dataclass
 from dataclasses import field
@@ -47,20 +48,25 @@ DEFAULT_CONTENT_METADATA_SOURCE = "ai-tools:content-enhancer"
 DEFAULT_CONTENT_REQUEST_TIMEOUT_SECONDS = 90.0
 DEFAULT_CONTENT_MAX_RETRIES = 0
 
-SUSPICIOUS_KEYWORDS = (
+HIGH_RISK_KEYWORDS = (
     "aimbot",
     "cheat",
     "exploit",
-    "hack",
     "bypass",
-    "predictor",
-    "prediction",
-    "casino",
-    "betting",
-    "bet",
+    "hack",
+)
+
+GAMBLING_CONTEXT_KEYWORDS = (
     "aviator",
+    "betting",
+    "casino",
     "slot",
     "gambling",
+)
+
+GAMBLING_SUPPORT_KEYWORDS = (
+    "predictor",
+    "prediction",
 )
 
 TIER_PRIORITY = {
@@ -184,15 +190,21 @@ def has_explicit_editorial_review(tool: dict[str, Any]) -> bool:
 
 
 def find_suspicious_keywords(tool: dict[str, Any]) -> list[str]:
-    """Return matched suspicious keywords from name/description/url/tags."""
+    """Return matched suspicious keywords from normalized tokens, not substrings."""
     haystacks = [
         str(tool.get("name") or "").lower(),
         str(tool.get("description") or "").lower(),
         str(tool.get("url") or "").lower(),
         " ".join(str(tag).lower() for tag in tool.get("tags") or []),
     ]
-    text = " ".join(haystacks)
-    return [keyword for keyword in SUSPICIOUS_KEYWORDS if keyword in text]
+    tokens = set(re.findall(r"[a-z0-9]+", " ".join(haystacks)))
+
+    matches = [keyword for keyword in HIGH_RISK_KEYWORDS if keyword in tokens]
+    gambling_matches = [keyword for keyword in GAMBLING_CONTEXT_KEYWORDS if keyword in tokens]
+    matches.extend(gambling_matches)
+    if gambling_matches:
+        matches.extend(keyword for keyword in GAMBLING_SUPPORT_KEYWORDS if keyword in tokens)
+    return matches
 
 
 def resolve_content_metadata_source() -> str:
