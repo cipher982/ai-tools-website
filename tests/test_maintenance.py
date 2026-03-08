@@ -12,12 +12,20 @@ class _DummySummary:
     def __init__(self):
         self.metrics = {}
         self.attributes = {}
+        self.status = "success"
+        self.error_type = None
+        self.error_note = None
 
     def add_metric(self, name, value):
         self.metrics[name] = value
 
     def add_attribute(self, name, value):
         self.attributes[name] = value
+
+    def mark_failed(self, *, error_type=None, note=None):
+        self.status = "error"
+        self.error_type = error_type
+        self.error_note = note
 
 
 def test_build_parser_accepts_editorial_review_options():
@@ -140,6 +148,9 @@ def test_editorial_review_database_forwards_args_and_records_summary(monkeypatch
     assert summary.metrics["action_keep"] == 1
     assert summary.attributes["requested_slugs"] == "opencode,missing-tool"
     assert summary.attributes["missing_slugs"] == "missing-tool"
+    assert summary.status == "error"
+    assert summary.error_type == "PartialFailure"
+    assert summary.error_note == "1 editorial reviews failed"
     assert '"selected": 2' in captured.out
 
 
@@ -237,6 +248,39 @@ def test_editorial_loop_database_forwards_args_and_records_summary(monkeypatch, 
     assert summary.metrics["action_keep"] == 2
     assert summary.attributes["requested_slugs"] == "opencode"
     assert '"selected": 2' in captured.out
+
+
+def test_editorial_loop_database_marks_partial_failures(monkeypatch):
+    summary = _DummySummary()
+
+    @contextmanager
+    def fake_pipeline_summary(name):
+        yield summary
+
+    result = EditorialLoopResult(
+        selected=3,
+        reviewed=2,
+        updated=2,
+        failed=1,
+        enriched=0,
+        content_failed=1,
+        dry_run=True,
+        reviewed_slugs=["good-tool"],
+        failed_slugs=["bad-tool"],
+        action_counts={"delete": 2},
+        reason_counts={"suspicious": 3},
+        items=[EditorialLoopItemResult(slug="bad-tool", reasons=["suspicious"], error="review_failed")],
+    )
+
+    monkeypatch.setattr(maintenance, "pipeline_summary", fake_pipeline_summary)
+    monkeypatch.setattr(maintenance, "run_editorial_loop", lambda **kwargs: result)
+
+    returned = maintenance.editorial_loop_database(dry_run=True)
+
+    assert returned == result
+    assert summary.status == "error"
+    assert summary.error_type == "PartialFailure"
+    assert summary.error_note == "1 editorial reviews failed; 1 content refreshes failed"
 
 
 def test_dispatch_task_calls_editorial_loop_database(monkeypatch):

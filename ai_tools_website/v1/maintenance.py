@@ -335,6 +335,8 @@ def editorial_review_database(
         summary.add_metric("reviewed", result.reviewed)
         summary.add_metric("updated", result.updated)
         summary.add_metric("failed", result.failed)
+        if result.failed:
+            summary.mark_failed(error_type="PartialFailure", note=f"{result.failed} editorial reviews failed")
         for action, count in result.action_counts.items():
             summary.add_metric(f"action_{action}", count)
         if result.missing_slugs:
@@ -385,6 +387,13 @@ def editorial_loop_database(
         summary.add_metric("enriched", result.enriched)
         summary.add_metric("failed", result.failed)
         summary.add_metric("content_failed", result.content_failed)
+        if result.failed or result.content_failed:
+            notes = []
+            if result.failed:
+                notes.append(f"{result.failed} editorial reviews failed")
+            if result.content_failed:
+                notes.append(f"{result.content_failed} content refreshes failed")
+            summary.mark_failed(error_type="PartialFailure", note="; ".join(notes))
         for action, count in result.action_counts.items():
             summary.add_metric(f"action_{action}", count)
         for reason, count in result.reason_counts.items():
