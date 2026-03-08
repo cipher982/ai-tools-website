@@ -17,6 +17,8 @@ from .data_manager import save_tools_with_retry
 from .editorial_batch import DEFAULT_MAX_PER_RUN
 from .editorial_batch import DEFAULT_STALE_AFTER_DAYS
 from .editorial_batch import run_editorial_review_batch
+from .editorial_loop import DEFAULT_CONTENT_MAX_PER_RUN
+from .editorial_loop import run_editorial_loop
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import MAINTENANCE_MODEL
@@ -344,16 +346,74 @@ def editorial_review_database(
         return result
 
 
+def editorial_loop_database(
+    *,
+    max_per_run: int = DEFAULT_MAX_PER_RUN,
+    content_max_per_run: int = DEFAULT_CONTENT_MAX_PER_RUN,
+    slugs: list[str] | None = None,
+    stale_after_days: int = DEFAULT_STALE_AFTER_DAYS,
+    dry_run: bool = False,
+    force: bool = False,
+    use_web_search: bool = True,
+    json_output: bool = False,
+):
+    """Run the autonomous editorial loop through the maintenance CLI."""
+    with pipeline_summary("maintenance_editorial_loop") as summary:
+        logger.info("Starting editorial loop...")
+        summary.add_metric("max_per_run", max_per_run)
+        summary.add_metric("content_max_per_run", content_max_per_run)
+        summary.add_metric("stale_after_days", stale_after_days)
+        summary.add_attribute("dry_run", dry_run)
+        summary.add_attribute("force", force)
+        summary.add_attribute("use_web_search", use_web_search)
+        if slugs:
+            summary.add_attribute("requested_slugs", ",".join(slugs))
+
+        result = run_editorial_loop(
+            max_per_run=max_per_run,
+            content_max_per_run=content_max_per_run,
+            slugs=slugs,
+            stale_after_days=stale_after_days,
+            dry_run=dry_run,
+            force=force,
+            use_web_search=use_web_search,
+        )
+
+        summary.add_metric("selected", result.selected)
+        summary.add_metric("reviewed", result.reviewed)
+        summary.add_metric("updated", result.updated)
+        summary.add_metric("enriched", result.enriched)
+        summary.add_metric("failed", result.failed)
+        summary.add_metric("content_failed", result.content_failed)
+        for action, count in result.action_counts.items():
+            summary.add_metric(f"action_{action}", count)
+        for reason, count in result.reason_counts.items():
+            summary.add_metric(f"reason_{reason}", count)
+        if result.missing_slugs:
+            summary.add_attribute("missing_slugs", ",".join(result.missing_slugs))
+
+        if json_output:
+            print(json.dumps(result.to_dict(), indent=2))
+
+        return result
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser for maintenance tasks."""
     parser = argparse.ArgumentParser(description="AI Tools Website Maintenance Tasks")
     parser.add_argument(
         "task",
-        choices=["deduplicate", "recategorize", "tier", "tier-traffic", "editorial-review"],
+        choices=["deduplicate", "recategorize", "tier", "tier-traffic", "editorial-review", "editorial-loop"],
         help="Maintenance task to perform",
     )
     parser.add_argument("--yes", "-y", action="store_true", help="Auto-accept changes without prompting")
     parser.add_argument("--max-per-run", type=int, default=DEFAULT_MAX_PER_RUN, help="Max tools to review")
+    parser.add_argument(
+        "--content-max-per-run",
+        type=int,
+        default=DEFAULT_CONTENT_MAX_PER_RUN,
+        help="Max kept tools to enrich in one run",
+    )
     parser.add_argument("--slug", dest="slugs", action="append", default=[], help="Specific slug to review; repeatable")
     parser.add_argument(
         "--stale-after-days",
@@ -381,6 +441,17 @@ def dispatch_task(args: argparse.Namespace) -> None:
     elif args.task == "editorial-review":
         editorial_review_database(
             max_per_run=args.max_per_run,
+            slugs=args.slugs,
+            stale_after_days=args.stale_after_days,
+            dry_run=args.dry_run,
+            force=args.force,
+            use_web_search=args.use_web_search,
+            json_output=args.json_output,
+        )
+    elif args.task == "editorial-loop":
+        editorial_loop_database(
+            max_per_run=args.max_per_run,
+            content_max_per_run=args.content_max_per_run,
             slugs=args.slugs,
             stale_after_days=args.stale_after_days,
             dry_run=args.dry_run,
