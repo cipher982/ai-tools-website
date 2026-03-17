@@ -1,11 +1,16 @@
 import argparse
+import asyncio
 from contextlib import contextmanager
+from datetime import datetime
+from types import SimpleNamespace
 
 from ai_tools_website.v1 import maintenance
 from ai_tools_website.v1.editorial_batch import EditorialBatchResult
 from ai_tools_website.v1.editorial_batch import ReviewedToolResult
 from ai_tools_website.v1.editorial_loop import EditorialLoopItemResult
 from ai_tools_website.v1.editorial_loop import EditorialLoopResult
+from ai_tools_website.v1.maintenance import CategoryChange
+from ai_tools_website.v1.maintenance import RecategorizationChanges
 
 
 class _DummySummary:
@@ -316,3 +321,81 @@ def test_dispatch_task_calls_editorial_loop_database(monkeypatch):
         "use_web_search": True,
         "json_output": False,
     }
+
+
+def test_recategorize_database_only_touches_changed_tools(monkeypatch):
+    summary = _DummySummary()
+    saved = {}
+    fixed_now = "2026-03-17T12:00:00+00:00"
+
+    class _FrozenDateTime:
+        @staticmethod
+        def now(_tz):
+            return datetime.fromisoformat(fixed_now)
+
+    class _FakeParseResult:
+        def __init__(self):
+            self.choices = [self]
+            self.message = self
+            self.parsed = RecategorizationChanges(
+                category_changes=[
+                    CategoryChange.model_validate(
+                        {
+                            "from": "Developer Tools",
+                            "to": "Code Assistants",
+                            "reason": "More specific fixed taxonomy.",
+                        }
+                    )
+                ]
+            )
+
+    @contextmanager
+    def fake_pipeline_summary(name):
+        assert name == "maintenance"
+        yield summary
+
+    current_tools = {
+        "tools": [
+            {
+                "name": "Tool A",
+                "category": "Developer Tools",
+                "description": "Moves to the new category.",
+            },
+            {
+                "name": "Tool B",
+                "category": "Image Generation",
+                "description": "Should stay untouched.",
+                "updated_at": "2026-02-01T00:00:00+00:00",
+            },
+        ]
+    }
+
+    def fake_save_tools(payload):
+        saved["payload"] = payload
+
+    monkeypatch.setattr(maintenance, "datetime", _FrozenDateTime)
+    monkeypatch.setattr(maintenance, "load_tools", lambda: current_tools)
+    monkeypatch.setattr(
+        maintenance,
+        "client",
+        SimpleNamespace(
+            beta=SimpleNamespace(
+                chat=SimpleNamespace(completions=SimpleNamespace(parse=lambda **kwargs: _FakeParseResult()))
+            )
+        ),
+    )
+    monkeypatch.setattr(maintenance, "save_tools_with_retry", fake_save_tools)
+    monkeypatch.setattr(maintenance, "pipeline_summary", fake_pipeline_summary)
+
+    asyncio.run(maintenance.recategorize_database(auto_accept=True))
+
+    saved_tools = saved["payload"]["tools"]
+    assert saved_tools[0]["category"] == "Code Assistants"
+    assert saved_tools[0]["updated_at"] == fixed_now
+    assert "last_reviewed_at" not in saved_tools[0]
+    assert "last_indexed_at" not in saved_tools[0]
+
+    assert saved_tools[1]["category"] == "Image Generation"
+    assert saved_tools[1]["updated_at"] == "2026-02-01T00:00:00+00:00"
+    assert "last_reviewed_at" not in saved_tools[1]
+    assert "last_indexed_at" not in saved_tools[1]

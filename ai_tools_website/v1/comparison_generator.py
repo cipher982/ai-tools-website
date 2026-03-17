@@ -402,6 +402,7 @@ def _store_comparison_in_tools(
             # Use distinct copies to prevent shared mutations
             payload = comparison_clean if tools_updated == 0 else dict(comparison_clean)
             tool["comparisons"][comparison_key] = payload
+            tool["updated_at"] = last_generated
             tool["last_reviewed_at"] = last_generated
             tool["last_indexed_at"] = last_generated
             tools_updated += 1
@@ -410,6 +411,7 @@ def _store_comparison_in_tools(
     if tools_updated == 0 and all_tools:
         all_tools[0].setdefault("comparisons", {})
         all_tools[0]["comparisons"][comparison_key] = dict(comparison_clean)
+        all_tools[0]["updated_at"] = last_generated
         all_tools[0]["last_reviewed_at"] = last_generated
         all_tools[0]["last_indexed_at"] = last_generated
         logger.info(f"Added comparison as fallback to: {all_tools[0].get('name')}")

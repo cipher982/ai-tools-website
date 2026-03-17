@@ -658,6 +658,7 @@ async def find_new_tools(*, use_search_cache: bool = False, dry_run: bool = Fals
                             "description": tool.description,
                             "url": tool.url,
                             "category": tool.category,
+                            "updated_at": now_iso,
                             "last_reviewed_at": now_iso,
                             "last_indexed_at": now_iso,
                         }
@@ -685,6 +686,7 @@ async def find_new_tools(*, use_search_cache: bool = False, dry_run: bool = Fals
                             "description": tool.description,
                             "url": tool.url,
                             "category": tool.category,
+                            "updated_at": now_iso,
                             "discovered_at": now_iso,
                             "last_reviewed_at": now_iso,
                             "last_enhanced_at": "",

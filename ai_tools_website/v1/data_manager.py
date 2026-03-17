@@ -31,6 +31,25 @@ BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "")
 _minio_client = None
 
 
+def _normalized_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a deep-copied payload without transient save metadata."""
+    normalized = json.loads(json.dumps(payload))
+    normalized.pop("_meta", None)
+    return normalized
+
+
+def _content_changed(existing: Dict[str, Any] | None, candidate: Dict[str, Any]) -> bool:
+    """Compare persisted content while ignoring dataset save timestamps."""
+    if existing is None:
+        return True
+
+    existing_content = _normalized_payload(existing)
+    candidate_content = _normalized_payload(candidate)
+    existing_content.pop("last_updated", None)
+    candidate_content.pop("last_updated", None)
+    return existing_content != candidate_content
+
+
 def get_minio_client():
     """Get or create Minio client with lazy initialization."""
     if use_local_storage():
@@ -219,6 +238,9 @@ def save_tools(tools_data: Dict) -> None:
 
     if use_local_storage():
         path = local_tools_path()
+        latest: Dict[str, Any] | None = (
+            read_local_json(path, {"tools": [], "last_updated": ""}) if path.exists() else None
+        )
         if expected_last_modified and path.exists():
             try:
                 stat = path.stat()
@@ -239,6 +261,11 @@ def save_tools(tools_data: Dict) -> None:
             except Exception as exc:
                 raise RuntimeError(f"tools.json changed since load (local storage): {exc}") from exc
         payload.setdefault("tools", [])
+        if not _content_changed(latest, payload):
+            if latest is not None:
+                payload["last_updated"] = latest.get("last_updated", payload.get("last_updated", ""))
+            logger.info("No changes detected in tools.json; skipping local save")
+            return
         payload["last_updated"] = datetime.now(timezone.utc).isoformat()
         write_local_json(path, payload)
         logger.info(f"Successfully saved {len(payload['tools'])} tools to local storage")
@@ -246,6 +273,7 @@ def save_tools(tools_data: Dict) -> None:
 
     client = get_minio_client()
     try:
+        latest: Dict[str, Any] | None = None
         if expected_etag:
             try:
                 stat = client.stat_object(BUCKET_NAME, "tools.json")
@@ -267,7 +295,22 @@ def save_tools(tools_data: Dict) -> None:
                 )
                 payload = dict(latest)
                 payload["tools"] = merged_tools
+        if latest is None:
+            try:
+                latest_resp = client.get_object(BUCKET_NAME, "tools.json")
+                latest = json.loads(latest_resp.read())
+                latest_resp.close()
+                latest_resp.release_conn()
+            except S3Error as exc:
+                if "NoSuchKey" not in str(exc):
+                    raise
+                latest = None
         payload.setdefault("tools", [])
+        if not _content_changed(latest, payload):
+            if latest is not None:
+                payload["last_updated"] = latest.get("last_updated", payload.get("last_updated", ""))
+            logger.info("No changes detected in tools.json; skipping Minio save")
+            return
         payload["last_updated"] = datetime.now(timezone.utc).isoformat()
         data = BytesIO(json.dumps(payload, indent=2).encode())
         client.put_object(

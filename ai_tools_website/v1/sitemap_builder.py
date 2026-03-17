@@ -24,7 +24,6 @@ from ai_tools_website.v1.data_manager import get_minio_client
 from ai_tools_website.v1.data_manager import load_tools
 from ai_tools_website.v1.editorial import is_indexable_tool
 from ai_tools_website.v1.seo_utils import generate_category_slug
-from ai_tools_website.v1.seo_utils import generate_comparison_slug
 from ai_tools_website.v1.seo_utils import generate_tool_slug
 
 logger = logging.getLogger(__name__)
@@ -35,8 +34,15 @@ SITEMAP_FILES = {
     "sitemap-static.xml": "Static routes and landing pages",
     "sitemap-tools.xml": "Individual AI tool detail pages",
     "sitemap-categories.xml": "Category listing pages",
-    "sitemap-comparisons.xml": "Tool comparison guides",
 }
+
+PUBLIC_TOOL_LASTMOD_FIELDS = (
+    "updated_at",
+    "enhanced_at_v2",
+    "last_enhanced_at",
+    "enhanced_at",
+    "discovered_at",
+)
 
 
 def _now_iso() -> str:
@@ -105,12 +111,12 @@ def _latest_lastmod(entries: Iterable[Dict[str, str]]) -> str:
     return best.date().isoformat()
 
 
-def _build_static_entries(base_url: str) -> List[Dict[str, str]]:
-    lastmod = _now_iso()[:10]
-    return [
-        {"loc": base_url, "lastmod": lastmod},
-        {"loc": f"{base_url}/comparisons", "lastmod": lastmod},
-    ]
+def _tool_lastmod(tool: Dict[str, str]) -> str:
+    return _choose_lastmod(*(tool.get(field) for field in PUBLIC_TOOL_LASTMOD_FIELDS))
+
+
+def _build_static_entries(base_url: str, *, homepage_lastmod: str) -> List[Dict[str, str]]:
+    return [{"loc": base_url, "lastmod": homepage_lastmod}]
 
 
 def _build_tool_entries(tools: List[Dict[str, str]], base_url: str) -> List[Dict[str, str]]:
@@ -119,61 +125,45 @@ def _build_tool_entries(tools: List[Dict[str, str]], base_url: str) -> List[Dict
         slug = tool.get("slug") or generate_tool_slug(tool.get("name", ""))
         if not slug:
             continue
-        lastmod = _choose_lastmod(
-            tool.get("enhanced_at_v2"),
-            tool.get("last_reviewed_at"),
-            tool.get("last_enhanced_at"),
-            tool.get("enhanced_at"),
-            tool.get("discovered_at"),
-        )
         entries.append(
             {
                 "loc": f"{base_url}/tools/{quote(slug)}",
-                "lastmod": lastmod,
+                "lastmod": _tool_lastmod(tool),
             }
         )
     return entries
 
 
-def _build_category_entries(category_metadata: Dict[str, Dict], base_url: str) -> List[Dict[str, str]]:
-    entries: List[Dict[str, str]] = []
-    for data in category_metadata.values():
-        slug = data.get("slug") or generate_category_slug(data.get("name", ""))
+def _build_category_entries(
+    tools: List[Dict[str, str]],
+    category_metadata: Dict[str, Dict],
+    base_url: str,
+) -> List[Dict[str, str]]:
+    visible_categories: Dict[str, Dict[str, str | None]] = {}
+
+    for tool in tools:
+        name = tool.get("category", "Other")
+        slug = generate_category_slug(name)
         if not slug:
             continue
-        lastmod = _choose_lastmod(data.get("last_rebuilt_at"))
+        entry = visible_categories.setdefault(slug, {"name": name, "slug": slug, "lastmod": None})
+        entry["lastmod"] = _choose_lastmod(entry.get("lastmod"), _tool_lastmod(tool))
+
+    for data in category_metadata.values():
+        slug = data.get("slug") or generate_category_slug(data.get("name", ""))
+        if slug in visible_categories:
+            visible_categories[slug]["name"] = data.get("name") or visible_categories[slug]["name"]
+            visible_categories[slug]["slug"] = slug
+
+    entries: List[Dict[str, str]] = []
+    for slug in sorted(visible_categories):
+        data = visible_categories[slug]
         entries.append(
             {
-                "loc": f"{base_url}/category/{quote(slug)}",
-                "lastmod": lastmod,
+                "loc": f"{base_url}/category/{quote(str(data['slug']))}",
+                "lastmod": str(data["lastmod"] or _now_iso()[:10]),
             }
         )
-    return entries
-
-
-def _build_comparison_entries(tools: List[Dict[str, Dict]], base_url: str) -> List[Dict[str, str]]:
-    entries: List[Dict[str, str]] = []
-    seen_slugs = set()
-    for tool in tools:
-        comparisons = tool.get("comparisons", {})
-        for comparison in comparisons.values():
-            slug = comparison.get("slug")
-            if not slug:
-                opportunity = comparison.get("opportunity", {})
-                slug = generate_comparison_slug(
-                    opportunity.get("tool1", ""),
-                    opportunity.get("tool2", ""),
-                )
-            if not slug or slug in seen_slugs:
-                continue
-            seen_slugs.add(slug)
-            lastmod = _choose_lastmod(comparison.get("last_generated_at"))
-            entries.append(
-                {
-                    "loc": f"{base_url}/compare/{quote(slug)}",
-                    "lastmod": lastmod,
-                }
-            )
     return entries
 
 
@@ -182,33 +172,18 @@ def build_sitemaps(tools_data: Dict[str, Dict], base_url: str) -> Dict[str, byte
     normalized_base = base_url.rstrip("/")
     tools = [tool for tool in tools_data.get("tools", []) if is_indexable_tool(tool)]
     category_metadata = tools_data.get("category_metadata") or {}
-    visible_category_slugs = {generate_category_slug(tool.get("category", "Other")) for tool in tools}
-
-    if not category_metadata:
-        provisional: Dict[str, Dict] = {}
-        for tool in tools:
-            name = tool.get("category", "Other")
-            slug = generate_category_slug(name)
-            entry = provisional.setdefault(slug, {"name": name, "slug": slug, "last_rebuilt_at": None})
-            entry["last_rebuilt_at"] = _choose_lastmod(entry.get("last_rebuilt_at"), tool.get("last_reviewed_at"))
-        category_metadata = provisional
-    else:
-        category_metadata = {
-            key: value
-            for key, value in category_metadata.items()
-            if (value.get("slug") or generate_category_slug(value.get("name", ""))) in visible_category_slugs
-        }
-
-    static_entries = _build_static_entries(normalized_base)
     tool_entries = _build_tool_entries(tools, normalized_base)
-    category_entries = _build_category_entries(category_metadata, normalized_base)
-    comparison_entries = _build_comparison_entries(tools, normalized_base)
+    category_entries = _build_category_entries(tools, category_metadata, normalized_base)
+    homepage_lastmod = _latest_lastmod([*tool_entries, *category_entries])
+    static_entries = _build_static_entries(
+        normalized_base,
+        homepage_lastmod=homepage_lastmod,
+    )
 
     sitemap_blobs = {
         "sitemap-static.xml": _build_urlset(static_entries),
         "sitemap-tools.xml": _build_urlset(tool_entries),
         "sitemap-categories.xml": _build_urlset(category_entries),
-        "sitemap-comparisons.xml": _build_urlset(comparison_entries),
     }
 
     sitemap_base = f"{normalized_base}/sitemaps"
@@ -217,7 +192,6 @@ def build_sitemaps(tools_data: Dict[str, Dict], base_url: str) -> Dict[str, byte
         "sitemap-static.xml": static_entries,
         "sitemap-tools.xml": tool_entries,
         "sitemap-categories.xml": category_entries,
-        "sitemap-comparisons.xml": comparison_entries,
     }
 
     for filename, xml_blob in sitemap_blobs.items():

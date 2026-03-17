@@ -65,23 +65,43 @@ def test_build_sitemaps_produces_expected_sections():
     assert "sitemap-index.xml" in sitemaps
     assert "sitemap-tools.xml" in sitemaps
     assert "sitemap-categories.xml" in sitemaps
-    assert "sitemap-comparisons.xml" in sitemaps
 
     index_root = ElementTree.fromstring(sitemaps["sitemap-index.xml"])
     sitemap_locs = {elem.findtext("{http://www.sitemaps.org/schemas/sitemap/0.9}loc") for elem in index_root}
     assert f"{base_url}/sitemaps/sitemap-tools.xml" in sitemap_locs
+    assert f"{base_url}/sitemaps/sitemap-comparisons.xml" not in sitemap_locs
 
     tools_root = ElementTree.fromstring(sitemaps["sitemap-tools.xml"])
-    tool_locs = {elem.findtext("{http://www.sitemaps.org/schemas/sitemap/0.9}loc") for elem in tools_root}
+    tool_entries = {
+        elem.findtext("{http://www.sitemaps.org/schemas/sitemap/0.9}loc"): elem.findtext(
+            "{http://www.sitemaps.org/schemas/sitemap/0.9}lastmod"
+        )
+        for elem in tools_root
+    }
+    tool_locs = set(tool_entries)
     assert f"{base_url}/tools/example-tool" in tool_locs
     assert f"{base_url}/tools/noindex-tool" not in tool_locs
     assert f"{base_url}/tools/deleted-tool" not in tool_locs
+    assert tool_entries[f"{base_url}/tools/example-tool"] == "2025-10-08"
 
     categories_root = ElementTree.fromstring(sitemaps["sitemap-categories.xml"])
-    category_locs = {elem.findtext("{http://www.sitemaps.org/schemas/sitemap/0.9}loc") for elem in categories_root}
+    category_entries = {
+        elem.findtext("{http://www.sitemaps.org/schemas/sitemap/0.9}loc"): elem.findtext(
+            "{http://www.sitemaps.org/schemas/sitemap/0.9}lastmod"
+        )
+        for elem in categories_root
+    }
+    category_locs = set(category_entries)
     assert f"{base_url}/category/developer-tools" in category_locs
     assert f"{base_url}/category/shadow-tools" not in category_locs
+    assert category_entries[f"{base_url}/category/developer-tools"] == "2025-10-08"
 
-    comparisons_root = ElementTree.fromstring(sitemaps["sitemap-comparisons.xml"])
-    comparison_locs = {elem.findtext("{http://www.sitemaps.org/schemas/sitemap/0.9}loc") for elem in comparisons_root}
-    assert f"{base_url}/compare/example-tool-vs-other-tool" in comparison_locs
+    static_root = ElementTree.fromstring(sitemaps["sitemap-static.xml"])
+    static_entries = {
+        elem.findtext("{http://www.sitemaps.org/schemas/sitemap/0.9}loc"): elem.findtext(
+            "{http://www.sitemaps.org/schemas/sitemap/0.9}lastmod"
+        )
+        for elem in static_root
+    }
+    assert static_entries[base_url] == "2025-10-08"
+    assert f"{base_url}/comparisons" not in static_entries

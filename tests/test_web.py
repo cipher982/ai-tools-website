@@ -190,6 +190,7 @@ class TestRoutes:
         response = client.get("/comparisons")
         assert 'rel="canonical"' in response.text
         assert "https://drose.io/aitools/comparisons" in response.text
+        assert 'content="noindex, follow"' in response.text
 
     def test_health_endpoint(self, client):
         """Health endpoint should return ok."""
@@ -254,3 +255,8 @@ class TestEditorialVisibility:
         assert response.status_code == 200
         assert "Visible Tool vs Other Tool" in response.text
         assert "Quiet Tool vs Other Tool" not in response.text
+
+    def test_comparison_page_is_noindex(self, editorial_client):
+        response = editorial_client.get("/compare/visible-tool-vs-other-tool")
+        assert response.status_code == 200
+        assert 'content="noindex, follow"' in response.text

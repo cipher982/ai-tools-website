@@ -161,19 +161,27 @@ Analyze this categorization and suggest a revised category structure.""",
 
             # Check if tool should move
             if tool["name"] in tool_map:
-                new_tool["category"] = tool_map[tool["name"]]
-                moved_count += 1
-                logger.info(f"Moving {tool['name']} to {new_tool['category']}")
+                new_category = tool_map[tool["name"]]
+                if new_category != current_cat:
+                    new_tool["category"] = new_category
+                    new_tool["updated_at"] = timestamp
+                    moved_count += 1
+                    logger.info(f"Moving {tool['name']} to {new_tool['category']}")
             # Check if category should change
             elif current_cat in category_map:
-                new_tool["category"] = category_map[current_cat]
-                renamed_count += 1
-                logger.info(f"Updating category for {tool['name']}: {current_cat} -> {new_tool['category']}")
-
-            new_tool["last_reviewed_at"] = timestamp
-            new_tool["last_indexed_at"] = timestamp
+                new_category = category_map[current_cat]
+                if new_category != current_cat:
+                    new_tool["category"] = new_category
+                    new_tool["updated_at"] = timestamp
+                    renamed_count += 1
+                    logger.info(f"Updating category for {tool['name']}: {current_cat} -> {new_tool['category']}")
 
             updated_tools.append(new_tool)
+
+        if moved_count == 0 and renamed_count == 0:
+            logger.info("Proposed changes did not alter the current database.")
+            summary.add_attribute("no_effective_changes", True)
+            return
 
         # Save changes
         current["tools"] = updated_tools
