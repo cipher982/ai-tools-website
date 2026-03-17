@@ -1,19 +1,72 @@
+<p align="center">
+  <img src=".github/assets/repo-hero.svg" alt="AI Tools Website hero banner" width="100%">
+</p>
+
+<p align="center">
+  <strong>Simple AI and LLM product directory for basic SEO.</strong><br>
+  Fixed categories, thin tool records, honest sitemap freshness.
+</p>
+
+<p align="center">
+  <a href="https://drose.io/aitools">Live directory</a>
+  ·
+  <a href="SLIM_DIRECTORY_RESET.md">Reset spec</a>
+  ·
+  <a href="#local-development">Local development</a>
+</p>
+
 # AI Tools Website
 
-Slim AI/LLM product directory at `drose.io/aitools`.
+AI Tools Website powers `drose.io/aitools`, a slim directory of AI and LLM products.
 
-This repo is being reset from an autonomous content machine into a simple directory for basic SEO. The canonical reset spec lives in [SLIM_DIRECTORY_RESET.md](SLIM_DIRECTORY_RESET.md).
+The project used to behave like an autonomous content machine. It now does something smaller and more defensible: publish clean tool pages, fixed category pages, and honest sitemaps from a normalized public catalog.
 
-## Product Scope
+## At A Glance
 
-The live product is intentionally narrow:
+| Area | Current shape |
+| --- | --- |
+| Live product | Directory homepage, fixed category pages, tool pages |
+| Stack | FastHTML + Python |
+| Storage | MinIO in production, local JSON in development |
+| Deploy | Coolify on `clifford` |
+| Scheduler | Sauron |
+| Active production jobs | `aitools-sitemaps`, `aitools-umami-watchdog` |
 
-- homepage
+## What This Repo Ships
+
+- directory homepage for AI and LLM products
 - fixed category pages
-- tool pages
-- honest sitemap freshness
+- thin tool pages with normalized metadata
+- publish policy and junk blocking
+- sitemap generation
+- Umami analytics wiring
 
-Published tools are projected into a thin public record:
+## What This Repo Explicitly Does Not Ship
+
+- autonomous editorial rewrites
+- comparison farms
+- daily recategorization churn
+- traffic tiering as publish control
+- fake freshness timestamps
+- AI-written digest emails
+
+<p align="center">
+  <img src=".github/assets/runtime-flow.svg" alt="Runtime flow for the slim directory" width="100%">
+</p>
+
+## Operating Principles
+
+| Principle | Meaning |
+| --- | --- |
+| Fixed taxonomy | Categories do not drift daily. |
+| Thin public records | Every published tool is projected into a small, consistent schema. |
+| Honest freshness | `updated_at` and sitemap `lastmod` only move when public content changes. |
+| Cheap runtime | Production only keeps the jobs that still matter. |
+| Policy first | Junk, cheats, and risky pages should not leak into the public directory. |
+
+## Public Catalog
+
+Published tools are projected by [`ai_tools_website/v1/public_catalog.py`](ai_tools_website/v1/public_catalog.py) into a thin public record:
 
 - `name`
 - `slug`
@@ -30,52 +83,16 @@ Published tools are projected into a thin public record:
 - `updated_at`
 - `content_hash`
 
-The projection logic lives in `ai_tools_website/v1/public_catalog.py`.
+The rendering layer only needs that thin record plus the publish policy in [`ai_tools_website/v1/editorial.py`](ai_tools_website/v1/editorial.py).
 
-## Architecture
+## Repo Map
 
-- `web` container: FastHTML app serving the directory
-- `updater` container: UV environment used by Sauron for explicit maintenance commands
-- storage: MinIO in production, local JSON in development
-- deployment: Coolify on `clifford`
-
-The web process keeps an in-memory tools cache. After changing `tools.json`, redeploy the app or hit the homepage to refresh public listings.
-
-## Runtime Scope
-
-Still part of the intended runtime:
-
-- public page rendering
-- publish policy and junk blocking
-- slim-record projection
-- sitemap generation
-- Umami tracking
-
-Retired from the intended runtime:
-
-- autonomous editorial loop
-- enhancement jobs
-- comparison generation
-- daily recategorization and tier churn
-- AI-written digest emails
-
-Legacy modules still exist in the repo for now, but they are not part of the slim-directory production loop.
-
-## Scheduled Jobs
-
-Current production jobs:
-
-- `aitools-sitemaps`
-- `aitools-umami-watchdog`
-
-Disabled jobs:
-
-- `aitools-discovery`
-- `aitools-editorial-loop`
-- `aitools-enhancement`
-- `aitools-comparisons`
-- `aitools-tier-traffic`
-- `aitools-digest`
+- [`ai_tools_website/v1/web.py`](ai_tools_website/v1/web.py): homepage, category pages, tool pages, SEO metadata
+- [`ai_tools_website/v1/public_catalog.py`](ai_tools_website/v1/public_catalog.py): slim public projection
+- [`ai_tools_website/v1/editorial.py`](ai_tools_website/v1/editorial.py): publish policy, tool status, junk blocking
+- [`ai_tools_website/v1/maintenance.py`](ai_tools_website/v1/maintenance.py): maintenance CLI, including `slim-reset`
+- [`ai_tools_website/v1/sitemap_builder.py`](ai_tools_website/v1/sitemap_builder.py): sitemap generation and publish
+- [`SLIM_DIRECTORY_RESET.md`](SLIM_DIRECTORY_RESET.md): first-principles reset spec
 
 ## Local Development
 
@@ -84,26 +101,32 @@ uv sync
 uv run uvicorn "ai_tools_website.v1.web:app" --reload --host 0.0.0.0 --port 8000
 ```
 
-Useful commands:
+Open `http://localhost:8000/aitools`.
+
+## Core Commands
 
 ```bash
-# Project the current dataset into the slim public schema
+# Preview the slim public projection without persisting it
 uv run python -m ai_tools_website.v1.maintenance slim-reset --dry-run --json-output
 
-# Persist the slim public schema
+# Persist the slim public projection
 uv run python -m ai_tools_website.v1.maintenance slim-reset
 
 # Rebuild sitemaps
 uv run python -m ai_tools_website.v1.sitemap_builder
 
-# Validate changes
+# Run the test suite
 uv run pytest
+
+# Lint the codebase
 uv run ruff check ai_tools_website tests
 ```
 
 ## Configuration
 
-See `.env.example` for a working baseline. Core runtime settings:
+See [`.env.example`](.env.example) for a working baseline.
+
+Core runtime settings:
 
 - `WEB_PORT`
 - `LOG_LEVEL`
@@ -123,10 +146,11 @@ See `.env.example` for a working baseline. Core runtime settings:
 - `UMAMI_DOMAINS`
 - `UMAMI_DROSE_ID`
 
-Legacy discovery/editorial/comparison modules still require model and API settings such as `OPENAI_API_KEY`, `TAVILY_API_KEY`, `SEARCH_MODEL`, `MAINTENANCE_MODEL`, `CONTENT_ENHANCER_MODEL`, and `WEB_SEARCH_MODEL`. Those are no longer required for the normal slim-directory runtime.
+Legacy discovery and content-generation modules still reference model and API settings such as `OPENAI_API_KEY`, `TAVILY_API_KEY`, `SEARCH_MODEL`, `MAINTENANCE_MODEL`, `CONTENT_ENHANCER_MODEL`, and `WEB_SEARCH_MODEL`. Those are not required for the normal slim-directory runtime.
 
 ## Deployment Notes
 
 - Coolify deploys both the web container and the updater container.
 - Sauron executes maintenance commands inside the updater container with `docker exec`.
+- The web process keeps an in-memory tools cache. After changing `tools.json`, redeploy the app or hit the homepage to refresh listings.
 - Container-to-LiteLLM traffic should use `http://litellm-proxy:4000`, not the public hostname.
