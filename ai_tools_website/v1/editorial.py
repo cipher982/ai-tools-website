@@ -31,13 +31,18 @@ VALID_TOOL_STATUSES = {
 }
 
 HIGH_RISK_KEYWORDS = {
+    "aimmy",
     "aimbot",
     "cheat",
     "exploit",
     "hack",
     "bypass",
+    "deepnude",
+    "easydeepnude",
     "uncensored",
     "nsfw",
+    "undressai",
+    "undresser",
 }
 
 GAMBLING_CONTEXT_KEYWORDS = {
@@ -49,7 +54,14 @@ GAMBLING_CONTEXT_KEYWORDS = {
 }
 
 RISKY_PHRASES = {
+    "aim alignment",
     "aim assist",
+    "anti-ban",
+    "auto-trigger",
+    "script executor",
+    "unlocked edition",
+    "undressed versions",
+    "undressing tool",
 }
 
 

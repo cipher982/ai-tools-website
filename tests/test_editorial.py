@@ -77,3 +77,53 @@ def test_policy_flags_reject_uncensored_and_nsfw_terms():
 
     assert get_policy_flags(blocked) == ["nsfw", "uncensored"]
     assert get_tool_status(blocked) == TOOL_STATUS_REJECTED
+
+
+def test_policy_flags_reject_nsfw_undressing_tools():
+    blocked = {
+        "name": "UndressAI",
+        "description": "AI-powered undressing tool that generates realistic undressed versions.",
+        "url": "https://example.com/undressai",
+    }
+
+    flags = get_policy_flags(blocked)
+
+    assert "undressai" in flags
+    assert "undressed versions" in flags
+    assert "undressing tool" in flags
+    assert get_tool_status(blocked) == TOOL_STATUS_REJECTED
+
+
+def test_policy_flags_reject_cheat_and_executor_language():
+    blocked = {
+        "name": "Aimmy-V2",
+        "description": "AI-based aim alignment with auto-trigger for FPS games.",
+        "url": "https://example.com/aimmy-v2",
+    }
+
+    flags = get_policy_flags(blocked)
+
+    assert "aim alignment" in flags
+    assert "auto-trigger" in flags
+    assert "aimmy" in flags
+    assert get_tool_status(blocked) == TOOL_STATUS_REJECTED
+
+
+def test_policy_flags_reject_script_executors_and_unlocker_bait():
+    executor = {
+        "name": "Xeno Executor",
+        "description": "Roblox script executor with anti-ban features.",
+        "url": "https://example.com/xeno-executor",
+    }
+    unlocker = {
+        "name": "Photoshop AI Tools Unlocked Edition",
+        "description": "Unlocked edition of Photoshop AI tools for premium features.",
+        "url": "https://example.com/photoshop-unlocked-edition",
+    }
+
+    assert "script executor" in get_policy_flags(executor)
+    assert "anti-ban" in get_policy_flags(executor)
+    assert get_tool_status(executor) == TOOL_STATUS_REJECTED
+
+    assert "unlocked edition" in get_policy_flags(unlocker)
+    assert get_tool_status(unlocker) == TOOL_STATUS_REJECTED
