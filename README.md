@@ -7,13 +7,13 @@
   Fixed categories, thin tool records, honest sitemap freshness.
 </p>
 
-<p align="center">
-  <a href="https://drose.io/aitools">Live directory</a>
-  ·
-  <a href="SLIM_DIRECTORY_RESET.md">Reset spec</a>
-  ·
-  <a href="#local-development">Local development</a>
-</p>
+> **Live site:** [https://drose.io/aitools](https://drose.io/aitools)
+
+## Quick Links
+
+- [Live site](https://drose.io/aitools)
+- [Reset spec](SLIM_DIRECTORY_RESET.md)
+- [Local development](#local-development)
 
 # AI Tools Website
 
