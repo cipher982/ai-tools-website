@@ -96,6 +96,22 @@ def test_build_parser_accepts_editorial_loop_options():
     assert args.json_output is True
 
 
+def test_build_parser_accepts_slim_reset_options():
+    parser = maintenance.build_parser()
+
+    args = parser.parse_args(
+        [
+            "slim-reset",
+            "--dry-run",
+            "--json-output",
+        ]
+    )
+
+    assert args.task == "slim-reset"
+    assert args.dry_run is True
+    assert args.json_output is True
+
+
 def test_editorial_review_database_forwards_args_and_records_summary(monkeypatch, capsys):
     summary = _DummySummary()
     recorded = {}
@@ -321,6 +337,53 @@ def test_dispatch_task_calls_editorial_loop_database(monkeypatch):
         "use_web_search": True,
         "json_output": False,
     }
+
+
+def test_slim_reset_database_projects_tools_and_saves(monkeypatch):
+    summary = _DummySummary()
+    saved = {}
+
+    @contextmanager
+    def fake_pipeline_summary(name):
+        assert name == "maintenance_slim_reset"
+        yield summary
+
+    current_tools = {
+        "tools": [
+            {
+                "id": "tool-1",
+                "name": "Visible Tool",
+                "slug": "visible-tool",
+                "description": "Visible tool.",
+                "url": "https://example.com/visible",
+                "category": "SDKs & Libraries",
+            },
+            {
+                "id": "tool-2",
+                "name": "Review Tool",
+                "slug": "review-tool",
+                "description": "Needs review.",
+                "url": "https://example.com/review",
+                "category": "Developer Tools",
+                "action": "needs_review",
+            },
+        ]
+    }
+
+    monkeypatch.setattr(maintenance, "load_tools", lambda: current_tools)
+    monkeypatch.setattr(maintenance, "pipeline_summary", fake_pipeline_summary)
+    monkeypatch.setattr(maintenance, "save_tools_with_retry", lambda payload: saved.setdefault("payload", payload))
+
+    result = maintenance.slim_reset_database()
+
+    assert result["projected_tools"] == 1
+    assert result["status_counts"]["published"] == 1
+    assert result["status_counts"]["candidate"] == 1
+
+    saved_tools = saved["payload"]["tools"]
+    assert len(saved_tools) == 1
+    assert saved_tools[0]["category"] == "Developer Tools"
+    assert saved_tools[0]["summary"] == "Visible tool."
 
 
 def test_recategorize_database_only_touches_changed_tools(monkeypatch):

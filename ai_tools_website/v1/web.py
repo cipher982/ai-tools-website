@@ -10,6 +10,7 @@ from typing import Dict
 from typing import List
 
 from dotenv import load_dotenv
+from fastcore.xml import to_xml
 from fasthtml.common import H1
 from fasthtml.common import H2
 from fasthtml.common import H3
@@ -21,7 +22,6 @@ from fasthtml.common import Code
 from fasthtml.common import Div
 from fasthtml.common import Head
 from fasthtml.common import Html
-from fasthtml.common import Img
 from fasthtml.common import Input
 from fasthtml.common import Li
 from fasthtml.common import Link
@@ -56,9 +56,11 @@ from ai_tools_website.v1.pipeline_analytics import get_contextual_summary
 from ai_tools_website.v1.pipeline_analytics import render_progress_bar
 from ai_tools_website.v1.pipeline_analytics import render_sparkline
 from ai_tools_website.v1.pipeline_db import get_latest_pipeline_status
+from ai_tools_website.v1.public_catalog import build_public_tool_record
+from ai_tools_website.v1.public_catalog import category_sort_key
+from ai_tools_website.v1.public_catalog import get_tool_summary
 from ai_tools_website.v1.seo_utils import generate_breadcrumb_list
 from ai_tools_website.v1.seo_utils import generate_category_slug
-from ai_tools_website.v1.seo_utils import generate_comparison_meta
 from ai_tools_website.v1.seo_utils import generate_meta_description
 from ai_tools_website.v1.seo_utils import generate_meta_title
 from ai_tools_website.v1.seo_utils import generate_product_schema
@@ -123,7 +125,7 @@ def url(path: str) -> str:
 
 def html_response(document, *, status_code: int = 200) -> Response:
     """Render a FastHTML document with an explicit HTTP status code."""
-    return Response(str(document), media_type="text/html", status_code=status_code)
+    return Response(to_xml(document), media_type="text/html", status_code=status_code)
 
 
 class TrailingSlashMiddleware(BaseHTTPMiddleware):
@@ -152,11 +154,14 @@ def get_tools_by_category() -> Dict:
         logger.info("Cache empty, loading tools from disk")
         tools = load_tools()
         by_category = {}
-        for tool in tools["tools"]:
+        for raw_tool in tools["tools"]:
+            tool = build_public_tool_record(raw_tool)
             if not is_public_tool(tool):
                 continue
             category = tool.get("category", "Other")
             by_category.setdefault(category, []).append(tool)
+        for category, category_tools in by_category.items():
+            by_category[category] = sorted(category_tools, key=lambda tool: tool.get("name", "").lower())
         tools_cache.update(by_category)
         logger.info(f"Loaded {sum(len(tools) for tools in by_category.values())} tools into cache")
     return tools_cache
@@ -167,11 +172,14 @@ async def refresh_tools_background():
     logger.info("Starting background cache refresh")
     tools = load_tools()
     by_category = {}
-    for tool in tools["tools"]:
+    for raw_tool in tools["tools"]:
+        tool = build_public_tool_record(raw_tool)
         if not is_public_tool(tool):
             continue
         category = tool.get("category", "Other")
         by_category.setdefault(category, []).append(tool)
+    for category, category_tools in by_category.items():
+        by_category[category] = sorted(category_tools, key=lambda tool: tool.get("name", "").lower())
     tools_cache.clear()
     tools_cache.update(by_category)
     logger.info(f"Background refresh complete, cached {sum(len(tools) for tools in by_category.values())} tools")
@@ -989,25 +997,78 @@ def _format_timestamp(value: str | None) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
+def _format_public_date(value: str | None) -> str:
+    if not value:
+        return "Unknown"
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    return dt.astimezone(timezone.utc).strftime("%B %d, %Y")
+
+
+def _tool_metric_lines(tool: dict) -> list[str]:
+    metrics = tool.get("metrics") if isinstance(tool.get("metrics"), dict) else {}
+    labels = {
+        "github_stars": "GitHub stars",
+        "hf_downloads": "Hugging Face downloads",
+        "npm_downloads_30d": "npm downloads (30d)",
+        "pypi_downloads_30d": "PyPI downloads (30d)",
+    }
+    lines: list[str] = []
+    for key in ("github_stars", "hf_downloads", "npm_downloads_30d", "pypi_downloads_30d"):
+        value = metrics.get(key)
+        if isinstance(value, int) and value > 0:
+            lines.append(f"{labels[key]}: {value:,}")
+    return lines
+
+
+def _tool_fact_items(tool: dict) -> list:
+    items = [Li(Strong("Category: "), tool.get("category", "Other AI Tools"))]
+    source_type = tool.get("source_type")
+    if source_type:
+        items.append(Li(Strong("Source: "), str(source_type).replace("-", " ").title()))
+    tags = tool.get("tags") if isinstance(tool.get("tags"), list) else []
+    if tags:
+        items.append(Li(Strong("Tags: "), ", ".join(tags)))
+    items.append(Li(Strong("Last updated: "), _format_public_date(tool.get("updated_at"))))
+    return items
+
+
+def _tool_links(tool: dict) -> list:
+    links = []
+    canonical_url = tool.get("canonical_url") or tool.get("url")
+    if canonical_url:
+        links.append(A("Visit official website", href=canonical_url, target="_blank", _class="cta-button"))
+    source_url = tool.get("source_url")
+    if source_url and source_url != canonical_url:
+        links.append(A("View source", href=source_url, target="_blank", _class="secondary-link"))
+    return links
+
+
 # Components
 def tool_card(tool):
     """Tool card component that links to internal tool page"""
     tool_slug = get_tool_slug(tool)
+    summary = get_tool_summary(tool)
+    metric_lines = _tool_metric_lines(tool)
     return A(
         {"href": url(f"/tools/{tool_slug}"), "_class": "tool-card"},
         H5(tool["name"]),
-        P(tool["description"]),
-        **{"data-search": f"{tool['name'].lower()} {tool['description'].lower()}"},
+        P(summary),
+        P(metric_lines[0], _class="tool-card-meta") if metric_lines else None,
+        **{"data-search": f"{tool['name'].lower()} {summary.lower()}"},
     )
 
 
 def tool_card_external(tool):
     """Tool card component that links to external URL (for homepage)"""
+    summary = get_tool_summary(tool)
     return A(
         {"href": tool["url"], "target": "_blank", "_class": "tool-card"},
         H5(tool["name"]),
-        P(tool["description"]),
-        **{"data-search": f"{tool['name'].lower()} {tool['description'].lower()}"},
+        P(summary),
+        **{"data-search": f"{tool['name'].lower()} {summary.lower()}"},
     )
 
 
@@ -1028,6 +1089,7 @@ def category_section(name, tools, use_internal_links=False):
         Span(f"{len(tools)} tools", _class="count"),
         Div(*cards, _class="tools-grid"),
         _class="category",
+        _id=f"category-{category_slug}",
     )
 
 
@@ -1376,7 +1438,13 @@ async def pipeline_status():
 @rt("/")
 async def get():
     tools_by_category = get_listed_tools_by_category()
-    sections = [category_section(cat, tools, use_internal_links=True) for cat, tools in tools_by_category.items()]
+    ordered_categories = sorted(tools_by_category.items(), key=lambda item: category_sort_key(item[0]))
+    sections = [category_section(cat, tools, use_internal_links=True) for cat, tools in ordered_categories]
+    category_links = []
+    for index, (category, _tools) in enumerate(ordered_categories):
+        if index:
+            category_links.append(" • ")
+        category_links.append(A(category, href=url(f"/category/{generate_category_slug(category)}")))
 
     # Trigger background refresh
     asyncio.create_task(refresh_tools_background())
@@ -1385,11 +1453,10 @@ async def get():
     tool_count = sum(len(tools) for tools in tools_by_category.values())
     category_count = len(tools_by_category)
 
-    meta_title = f"{tool_count}+ AI Tools Directory - Find the Right AI Tool for Any Task"
+    meta_title = f"{tool_count}+ AI and LLM Tools Directory"
     meta_desc = (
-        f"Browse {tool_count}+ AI tools across {category_count} categories. "
-        "Compare alternatives, check pricing, and find the best tool for coding, "
-        "image generation, voice cloning, and more."
+        f"Browse {tool_count}+ AI and LLM products across {category_count} fixed categories. "
+        "Clean directory pages for models, coding tools, agents, workflows, and developer tooling."
     )
 
     return Html(
@@ -1401,13 +1468,10 @@ async def get():
             Meta(
                 {
                     "name": "keywords",
-                    "content": (
-                        "AI tools, artificial intelligence, productivity tools, AI software, "
-                        "machine learning tools, automation"
-                    ),
+                    "content": ("AI tools, LLM tools, AI directory, language models, code assistants, agent tools"),
                 }
             ),
-            Meta({"name": "robots", "content": "noindex, follow"}),
+            Meta({"name": "robots", "content": "index, follow"}),
             Link(rel="canonical", href=get_canonical_url()),
             Meta({"property": "og:title", "content": meta_title}),
             Meta({"property": "og:description", "content": meta_desc}),
@@ -1420,19 +1484,13 @@ async def get():
         ),
         Body(
             Div(
-                Div(
-                    A(
-                        {
-                            "href": "https://github.com/cipher982/ai-tools-website",
-                            "target": "_blank",
-                            "_class": "github-link",
-                        },
-                        Img({"src": url("/github-mark-white.svg"), "alt": "GitHub", "width": "32", "height": "32"}),
-                    ),
-                    _class="github-corner",
-                ),
                 H1("AI Tools Directory", _class="window-title"),
-                P("Find the right AI tool for any task. Browse, compare, and discover.", _class="intro"),
+                P(
+                    "Simple directory of AI and LLM products. Browse by category or search for a specific tool.",
+                    _class="intro",
+                ),
+                P(f"{tool_count} tools across {category_count} fixed categories.", _class="count"),
+                Div(*category_links, _class="breadcrumbs"),
                 Input({"type": "search", "id": "search", "placeholder": "Search tools...", "_id": "search"}),
                 *sections,
                 _class="main-window",
@@ -1453,9 +1511,11 @@ async def get_tool_page(slug: str):
         )
 
     base_url = get_base_url()
-    pricing = tool.get("pricing")
-    meta_title = generate_meta_title(tool["name"], tool.get("category", "AI Tool"), pricing=pricing)
-    meta_desc = generate_meta_description(tool["name"], tool["description"], pricing=pricing)
+    category = tool.get("category", "Other AI Tools")
+    summary = get_tool_summary(tool)
+    canonical_url = tool.get("canonical_url") or tool.get("url")
+    meta_title = generate_meta_title(tool["name"], category)
+    meta_desc = generate_meta_description(tool["name"], summary)
     robots_content = "noindex,follow" if get_tool_noindex_status(tool) else "index,follow"
 
     # Generate breadcrumbs
@@ -1463,8 +1523,8 @@ async def get_tool_page(slug: str):
         [
             {"name": "Home", "url": ""},
             {
-                "name": tool.get("category", "Tools"),
-                "url": f"category/{generate_category_slug(tool.get('category', 'Tools'))}",
+                "name": category,
+                "url": f"category/{generate_category_slug(category)}",
             },
             {"name": tool["name"], "url": f"tools/{slug}"},
         ],
@@ -1475,25 +1535,10 @@ async def get_tool_page(slug: str):
     product_schema = generate_product_schema(tool, base_url)
 
     # Find related tools (same category)
-    category = tool.get("category", "Other")
     tools_by_category = get_listed_tools_by_category()
     related_tools = [t for t in tools_by_category.get(category, []) if get_tool_slug(t) != slug][:6]
-    editorial_blocks = render_editorial_summary(tool)
-    content_blocks = render_tool_sections(tool)
-
-    # Get screenshot if available
-    screenshot_url = get_screenshot_url(tool)
-    screenshot_block = None
-    if screenshot_url:
-        screenshot_block = Div(
-            Img(
-                src=screenshot_url,
-                alt=f"{tool['name']} screenshot",
-                loading="lazy",
-                _class="tool-screenshot",
-            ),
-            _class="tool-screenshot-container",
-        )
+    metric_lines = _tool_metric_lines(tool)
+    link_buttons = _tool_links(tool)
 
     return Html(
         Head(
@@ -1524,22 +1569,19 @@ async def get_tool_page(slug: str):
                     _class="breadcrumbs",
                 ),
                 # Main content
-                H1(f"{tool['name']} - AI {category} Tool", _class="tool-title"),
-                # Screenshot (if available)
-                screenshot_block if screenshot_block else None,
+                H1(tool["name"], _class="tool-title"),
+                P(summary, _class="intro"),
                 Div(
                     Div(
-                        *editorial_blocks,
-                        *content_blocks,
-                        H3("Key Information"),
-                        Ul(
-                            Li(f"Category: {category}"),
-                            Li(f"Type: AI {category} Tool"),
-                        ),
-                        Div(
-                            A("Visit Official Website", href=tool["url"], target="_blank", _class="cta-button"),
-                            _class="cta-section",
-                        ),
+                        H2("Key Information"),
+                        Ul(*_tool_fact_items(tool)),
+                        H2("Structured Metrics"),
+                        Ul(*[Li(line) for line in metric_lines])
+                        if metric_lines
+                        else P("No structured metrics captured yet."),
+                        H2("Links"),
+                        Div(*link_buttons, _class="cta-section") if link_buttons else P("No source link available."),
+                        P(f"Canonical source: {canonical_url}") if canonical_url else None,
                         _class="tool-content",
                     ),
                     # Sidebar with related tools
@@ -1560,168 +1602,47 @@ async def get_tool_page(slug: str):
 
 @rt("/comparisons")
 async def get_comparisons_hub():
-    """Comparisons hub page listing all available tool comparisons"""
-    all_comparisons = get_all_comparisons()
-    base_url = get_base_url()
-
-    meta_title = "AI Tool Comparisons - Side-by-Side Analysis & Reviews"
-    meta_desc = (
-        "Compare popular AI tools side-by-side. Detailed comparisons of features, "
-        "pricing, pros and cons to help you choose the right AI solution."
-    )
-
-    # Generate breadcrumbs
-    breadcrumbs = generate_breadcrumb_list(
-        [{"name": "Home", "url": ""}, {"name": "Comparisons", "url": "comparisons"}],
-        base_url,
-    )
-
-    # Build comparison cards
-    comparison_cards = []
-    for comp in sorted(all_comparisons, key=lambda x: x.get("title", "")):
-        comparison_cards.append(
-            A(
-                {"href": url(f"/compare/{comp['slug']}"), "_class": "tool-card"},
-                H5(f"{comp['tool1_name']} vs {comp['tool2_name']}"),
-                P(comp.get("meta_description", f"Compare {comp['tool1_name']} and {comp['tool2_name']}")[:150] + "..."),
-            )
-        )
-
-    return Html(
-        Head(
-            Title(meta_title),
-            Meta({"charset": "utf-8"}),
-            Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
-            Meta({"name": "description", "content": meta_desc}),
-            Meta({"name": "robots", "content": "noindex, follow"}),
-            Link(rel="canonical", href=get_canonical_url("comparisons")),
-            Meta({"property": "og:title", "content": meta_title}),
-            Meta({"property": "og:description", "content": meta_desc}),
-            Meta({"property": "og:type", "content": "website"}),
-            Meta({"property": "og:url", "content": f"{base_url}/comparisons"}),
-            Script(json.dumps(breadcrumbs), type="application/ld+json"),
-            StyleX(str(Path(__file__).parent / "static/styles.css")),
-            *umami_scripts(),
+    """Retired comparison hub."""
+    return html_response(
+        Html(
+            Head(
+                Title("Comparisons Retired"),
+                Meta({"name": "robots", "content": "noindex, follow"}),
+                StyleX(str(Path(__file__).parent / "static/styles.css")),
+            ),
+            Body(
+                Div(
+                    H1("Comparisons Retired", _class="window-title"),
+                    P("The slim directory reset no longer publishes comparison pages.", _class="intro"),
+                    P(A("Browse the directory", href=url("/"))),
+                    _class="main-window",
+                )
+            ),
         ),
-        Body(
-            Div(
-                # Breadcrumb navigation
-                Div(A("Home", href=url("/")), " › ", Span("Comparisons"), _class="breadcrumbs"),
-                # Main content
-                H1("AI Tool Comparisons", _class="window-title"),
-                P(
-                    f"Explore {len(all_comparisons)} side-by-side comparisons of popular AI tools. "
-                    "Find detailed analysis to help you choose the right solution.",
-                    _class="intro",
-                ),
-                # Comparisons grid
-                Section(
-                    H2("All Comparisons"),
-                    Div(*comparison_cards, _class="tools-grid")
-                    if comparison_cards
-                    else P("No comparisons available yet."),
-                    _class="category",
-                ),
-                _class="main-window",
-            )
-        ),
+        status_code=410,
     )
 
 
 @rt("/compare/{slug}")
 async def get_comparison_page(slug: str):
-    """Comparison page with SEO optimization"""
-    comparison, tool1_name, tool2_name = find_comparison_by_slug(slug)
-    if not comparison or not tool1_name or not tool2_name:
-        return html_response(
-            Html(
-                Head(Title("Comparison Not Found")),
-                Body(H1("Comparison Not Found"), P(f"No comparison found for: {slug}")),
+    """Retired comparison page."""
+    return html_response(
+        Html(
+            Head(
+                Title("Comparison Retired"),
+                Meta({"name": "robots", "content": "noindex, follow"}),
+                StyleX(str(Path(__file__).parent / "static/styles.css")),
             ),
-            status_code=404,
-        )
-
-    base_url = get_base_url()
-    title, meta_desc = generate_comparison_meta(
-        tool1_name,
-        tool2_name,
-        stored_title=comparison.get("title"),
-        stored_desc=comparison.get("meta_description"),
-    )
-
-    # Generate breadcrumbs
-    breadcrumbs = generate_breadcrumb_list(
-        [
-            {"name": "Home", "url": ""},
-            {"name": "Comparisons", "url": "comparisons"},
-            {"name": f"{tool1_name} vs {tool2_name}", "url": f"compare/{slug}"},
-        ],
-        base_url,
-    )
-
-    # Generate structured data for comparison
-    comparison_schema = {
-        "@context": "https://schema.org",
-        "@type": "Review",
-        "name": title,
-        "description": meta_desc,
-        "author": {"@type": "Organization", "name": "AI Tools Directory"},
-        "datePublished": comparison.get("last_updated", datetime.now().isoformat()),
-        "itemReviewed": [
-            {"@type": "SoftwareApplication", "name": tool1_name},
-            {"@type": "SoftwareApplication", "name": tool2_name},
-        ],
-    }
-
-    # Render comparison content
-    content_blocks = render_comparison_sections(comparison, tool1_name, tool2_name)
-
-    # Last updated info
-    last_updated = comparison.get("last_updated", "")
-    if last_updated:
-        try:
-            updated_date = datetime.fromisoformat(last_updated.replace("Z", "+00:00"))
-            formatted_date = updated_date.strftime("%B %d, %Y")
-        except ValueError:
-            formatted_date = last_updated
-    else:
-        formatted_date = "Recently"
-
-    return Html(
-        Head(
-            Title(title),
-            Meta({"charset": "utf-8"}),
-            Meta({"name": "viewport", "content": "width=device-width, initial-scale=1"}),
-            Meta({"name": "description", "content": meta_desc}),
-            Meta({"name": "robots", "content": "noindex, follow"}),
-            Link(rel="canonical", href=get_canonical_url(f"compare/{slug}")),
-            Meta({"property": "og:title", "content": title}),
-            Meta({"property": "og:description", "content": meta_desc}),
-            Meta({"property": "og:type", "content": "article"}),
-            Meta({"property": "og:url", "content": f"{base_url}/compare/{slug}"}),
-            Meta({"name": "article:author", "content": "AI Tools Directory"}),
-            Script(json.dumps(breadcrumbs), type="application/ld+json"),
-            Script(json.dumps(comparison_schema), type="application/ld+json"),
-            StyleX(str(Path(__file__).parent / "static/styles.css")),
-            *umami_scripts(),
+            Body(
+                Div(
+                    H1("Comparison Retired", _class="window-title"),
+                    P("The slim directory reset removed generated comparison pages.", _class="intro"),
+                    P(A("Browse the directory", href=url("/"))),
+                    _class="main-window",
+                )
+            ),
         ),
-        Body(
-            Div(
-                Section(
-                    H1(f"{tool1_name} vs {tool2_name}", _class="title"),
-                    P(f"Last updated: {formatted_date}", _class="last-updated"),
-                    *content_blocks,
-                    # Related tools section
-                    H2("Explore More Comparisons"),
-                    P(
-                        "Looking for other AI tool comparisons? Browse our complete directory to find "
-                        "the right tools for your needs."
-                    ),
-                    A("View All Tools", href=url("/"), _class="cta-button"),
-                ),
-                _class="main-window",
-            )
-        ),
+        status_code=410,
     )
 
 
@@ -1739,15 +1660,15 @@ async def get_category_page(category_slug: str):
         )
 
     base_url = get_base_url()
-    meta_title = f"Best AI {category_name} Tools - Complete Guide & Reviews"
+    meta_title = f"{category_name} | AI Tools Directory"
     meta_desc = (
-        f"Discover the top AI {category_name.lower()} tools. "
-        "Compare features, pricing, and find the perfect solution for your needs."
+        f"Browse AI and LLM products in {category_name}. "
+        "Simple directory pages with summaries, source links, and structured metrics when available."
     )
 
     # Generate breadcrumbs
     breadcrumbs = generate_breadcrumb_list(
-        [{"name": "Home", "url": ""}, {"name": f"AI {category_name} Tools", "url": f"category/{category_slug}"}],
+        [{"name": "Home", "url": ""}, {"name": category_name, "url": f"category/{category_slug}"}],
         base_url,
     )
 
@@ -1769,12 +1690,11 @@ async def get_category_page(category_slug: str):
         ),
         Body(
             Div(
-                # Breadcrumb navigation
-                Div(A("Home", href=url("/")), " › ", Span(f"AI {category_name} Tools"), _class="breadcrumbs"),
+                Div(A("Home", href=url("/")), " › ", Span(category_name), _class="breadcrumbs"),
                 # Main content
-                H1(f"Best AI {category_name} Tools", _class="category-title"),
+                H1(category_name, _class="category-title"),
                 P(
-                    f"Explore {len(tools)} AI {category_name.lower()} tools to find the perfect solution.",
+                    f"{len(tools)} tools in this fixed category.",
                     _class="category-intro",
                 ),
                 # Tools grid

@@ -335,16 +335,21 @@ def generate_product_schema(tool: Dict, base_url: str) -> Dict:
     """Generate Product/SoftwareApplication JSON-LD schema."""
     tool_slug = tool.get("slug") or generate_tool_slug(tool["name"])
     tool_url = f"{base_url}/tools/{tool_slug}"
+    summary = tool.get("summary") or tool.get("description") or ""
 
     schema = {
         "@context": "https://schema.org",
         "@type": ["Product", "SoftwareApplication"],
         "name": tool["name"],
-        "description": tool["description"],
+        "description": summary,
         "url": tool_url,
         "applicationCategory": tool.get("category", "Software"),
         "operatingSystem": "Web Browser",
     }
+
+    canonical_url = tool.get("canonical_url") or tool.get("url")
+    if canonical_url:
+        schema["sameAs"] = canonical_url
 
     # Add pricing if available
     pricing = tool.get("pricing")

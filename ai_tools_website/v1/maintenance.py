@@ -22,6 +22,8 @@ from .editorial_loop import run_editorial_loop
 from .logging_config import setup_logging
 from .logging_utils import pipeline_summary
 from .models import MAINTENANCE_MODEL
+from .public_catalog import build_category_metadata
+from .public_catalog import project_tools_document
 from .quality_tiers import compute_category_scores_from_traffic
 from .quality_tiers import tier_all_tools
 from .search import build_category_context
@@ -309,6 +311,48 @@ async def tier_database_with_traffic() -> None:
         logger.info("Tiering with traffic complete!")
 
 
+def slim_reset_database(*, dry_run: bool = False, json_output: bool = False, drop_nonpublic: bool = True) -> dict:
+    """Rewrite the catalog into the slim public-record shape."""
+    with pipeline_summary("maintenance_slim_reset") as summary:
+        logger.info("Starting slim directory reset...")
+        current = load_tools()
+        total = len(current.get("tools", []))
+        summary.add_metric("total_tools", total)
+        summary.add_attribute("dry_run", dry_run)
+        summary.add_attribute("drop_nonpublic", drop_nonpublic)
+
+        projected_tools, counts = project_tools_document(current, drop_nonpublic=drop_nonpublic)
+        summary.add_metric("projected_tools", len(projected_tools))
+        for status_name, count in counts.items():
+            summary.add_metric(status_name, count)
+
+        projected_doc = dict(current)
+        projected_doc["tools"] = projected_tools
+        projected_doc["category_metadata"] = build_category_metadata(projected_tools)
+        projected_doc.pop("slug_registry_version", None)
+
+        result = {
+            "total_tools": total,
+            "projected_tools": len(projected_tools),
+            "status_counts": counts,
+            "categories": sorted(
+                {tool.get("category", "") for tool in projected_tools},
+                key=lambda category: category.lower(),
+            ),
+        }
+
+        if dry_run:
+            logger.info("[DRY RUN] Slim reset would rewrite the catalog to %s public tools", len(projected_tools))
+        else:
+            save_tools_with_retry(projected_doc)
+            logger.info("Slim reset saved %s public tools", len(projected_tools))
+
+        if json_output:
+            print(json.dumps(result, indent=2))
+
+        return result
+
+
 def editorial_review_database(
     *,
     max_per_run: int = DEFAULT_MAX_PER_RUN,
@@ -420,7 +464,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AI Tools Website Maintenance Tasks")
     parser.add_argument(
         "task",
-        choices=["deduplicate", "recategorize", "tier", "tier-traffic", "editorial-review", "editorial-loop"],
+        choices=[
+            "deduplicate",
+            "recategorize",
+            "tier",
+            "tier-traffic",
+            "editorial-review",
+            "editorial-loop",
+            "slim-reset",
+        ],
         help="Maintenance task to perform",
     )
     parser.add_argument("--yes", "-y", action="store_true", help="Auto-accept changes without prompting")
@@ -474,6 +526,11 @@ def dispatch_task(args: argparse.Namespace) -> None:
             dry_run=args.dry_run,
             force=args.force,
             use_web_search=args.use_web_search,
+            json_output=args.json_output,
+        )
+    elif args.task == "slim-reset":
+        slim_reset_database(
+            dry_run=args.dry_run,
             json_output=args.json_output,
         )
 

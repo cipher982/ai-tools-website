@@ -180,16 +180,15 @@ class TestRoutes:
         assert "https://drose.io/aitools" in response.text
 
     def test_comparisons_hub_returns_200(self, client):
-        """Comparisons hub page should return 200."""
+        """Comparisons hub should be retired."""
         response = client.get("/comparisons")
-        assert response.status_code == 200
-        assert "AI Tool Comparisons" in response.text
+        assert response.status_code == 410
+        assert "Comparisons Retired" in response.text
 
     def test_comparisons_hub_has_canonical_link(self, client):
-        """Comparisons hub should have canonical link tag."""
+        """Retired comparisons hub should stay noindex."""
         response = client.get("/comparisons")
-        assert 'rel="canonical"' in response.text
-        assert "https://drose.io/aitools/comparisons" in response.text
+        assert response.status_code == 410
         assert 'content="noindex, follow"' in response.text
 
     def test_health_endpoint(self, client):
@@ -221,22 +220,21 @@ class TestEditorialVisibility:
     def test_tool_page_renders_editorial_summary_when_present(self, editorial_client):
         response = editorial_client.get("/tools/visible-tool")
         assert response.status_code == 200
-        assert "Quick Take" in response.text
-        assert "Best for:" in response.text
-        assert "Why Choose It" in response.text
-        assert "Consider Instead" in response.text
-        assert "Claude Code" in response.text
+        assert "Key Information" in response.text
+        assert "Structured Metrics" in response.text
+        assert "Visit official website" in response.text
 
     def test_tool_page_omits_editorial_summary_for_legacy_records(self, editorial_client):
         response = editorial_client.get("/tools/legacy-tool")
         assert response.status_code == 200
         assert "Quick Take" not in response.text
+        assert "Key Information" in response.text
 
     def test_noindex_tool_page_stays_public_with_noindex_meta(self, editorial_client):
         response = editorial_client.get("/tools/quiet-tool")
         assert response.status_code == 200
         assert 'content="noindex,follow"' in response.text
-        assert "Quiet Tool - AI Developer Tools Tool" in response.text
+        assert "Quiet Tool | AI Developer Tools Tool" in response.text
 
     def test_deleted_tool_page_returns_404(self, editorial_client):
         response = editorial_client.get("/tools/deleted-tool")
@@ -252,11 +250,10 @@ class TestEditorialVisibility:
 
     def test_comparisons_hub_hides_unlisted_tool_comparisons(self, editorial_client):
         response = editorial_client.get("/comparisons")
-        assert response.status_code == 200
-        assert "Visible Tool vs Other Tool" in response.text
-        assert "Quiet Tool vs Other Tool" not in response.text
+        assert response.status_code == 410
+        assert "Comparisons Retired" in response.text
 
     def test_comparison_page_is_noindex(self, editorial_client):
         response = editorial_client.get("/compare/visible-tool-vs-other-tool")
-        assert response.status_code == 200
+        assert response.status_code == 410
         assert 'content="noindex, follow"' in response.text
