@@ -84,6 +84,14 @@ def editorial_dataset():
                 "description": "Legacy records should still default to keep.",
                 "url": "https://example.com/legacy-tool",
             },
+            {
+                "id": "blocked-1",
+                "name": "PrimeAIM",
+                "slug": "primeaim",
+                "category": "Gaming Tools",
+                "description": "AI-powered aim assist for shooter games with ESP overlays.",
+                "url": "https://example.com/primeaim",
+            },
         ]
     }
 
@@ -199,6 +207,7 @@ class TestEditorialVisibility:
         assert "Quiet Tool" not in response.text
         assert "Deleted Tool" not in response.text
         assert "Review Tool" not in response.text
+        assert "PrimeAIM" not in response.text
 
     def test_category_page_hides_noindex_and_hidden_tools(self, editorial_client):
         response = editorial_client.get("/category/developer-tools")
@@ -234,6 +243,10 @@ class TestEditorialVisibility:
 
     def test_needs_review_tool_page_returns_404(self, editorial_client):
         response = editorial_client.get("/tools/review-tool")
+        assert response.status_code == 404
+
+    def test_policy_blocked_tool_page_returns_404(self, editorial_client):
+        response = editorial_client.get("/tools/primeaim")
         assert response.status_code == 404
 
     def test_comparisons_hub_hides_unlisted_tool_comparisons(self, editorial_client):
