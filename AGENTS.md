@@ -1,59 +1,46 @@
-AI Tools directory at drose.io/aitools - catalog of 535+ AI tools with categories, comparisons, and search. FastHTML/Python app with MinIO storage.
+AI Tools directory at drose.io/aitools. Slim AI/LLM product directory with homepage, category pages, and tool pages. FastHTML/Python app with MinIO or local JSON storage.
 
 ## Architecture
 
 - **Web container**: FastHTML app serving the site
-- **Updater container**: UV environment for maintenance tasks (no scheduler - just keeps alive for docker exec)
-- **Storage**: MinIO for sitemaps, tools.json persisted in container volume
+- **Updater container**: UV environment for explicit maintenance commands; Sauron `docker exec`s into it
+- **Storage**: MinIO in production; local JSON in development
 
 Deployed to clifford VPS via Coolify.
 - **LiteLLM from containers:** use `http://litellm-proxy:4000`, not the public `https://llm.drose.io` hostname.
-- **Listings cache:** the web process keeps an in-memory tools cache; after MinIO edits, hit the homepage or redeploy to refresh public listings.
+- **Listings cache:** the web process keeps an in-memory tools cache; after `tools.json` edits, redeploy or hit the homepage to refresh public listings.
 
 ## Scheduled Jobs
 
-All scheduled jobs run via **Sauron** (centralized scheduler on clifford). The updater container provides UV and dependencies; Sauron orchestrates when jobs run via `docker exec`.
+All scheduled jobs run via **Sauron** (centralized scheduler on clifford).
 
-| Job | Schedule (UTC) | Sauron ID | Description |
-|-----|----------------|-----------|-------------|
-| Discovery + tier | 02:00 daily | aitools-discovery | Search for new tools, recategorize, re-tier |
-| Traffic tier | 01:00 Sunday | aitools-tier-traffic | Fetch Umami pageviews, boost high-traffic tools |
-| Enhancement | 03:00 Monday | aitools-enhancement | AI content generation for tool pages |
-| Comparisons | 04:00 1st of month | aitools-comparisons | Detect and generate tool comparisons |
-| Sitemaps | 05:00 daily | aitools-sitemaps | Regenerate and publish sitemaps to MinIO |
+Enabled:
 
-**Manual job execution:**
+- `aitools-sitemaps`
+- `aitools-umami-watchdog`
+
+Disabled by the slim-directory reset:
+
+- `aitools-discovery`
+- `aitools-editorial-loop`
+- `aitools-enhancement`
+- `aitools-comparisons`
+- `aitools-tier-traffic`
+- `aitools-digest`
+
+**Manual execution:**
 ```bash
-# Via Sauron CLI
-ssh clifford "docker exec sauron-container python -m sauron.cli run aitools-tier-traffic"
-
-# Direct in updater container
-ssh clifford "docker exec aitools-updater uv run python -m ai_tools_website.v1.maintenance tier-traffic"
+ssh clifford "docker exec aitools-updater uv run python -m ai_tools_website.v1.maintenance slim-reset"
+ssh clifford "docker exec aitools-updater uv run python -m ai_tools_website.v1.sitemap_builder"
 ```
 
 See `~/git/sauron` for job definitions.
 
-## Quality Tiers
-
-Tools are scored and tiered for content generation budget:
-
-- **Tier 1** (top 50): Deep research, 5 web searches, 3 LLM passes
-- **Tier 2** (next 150): Standard research, 2 web searches, 2 LLM passes
-- **Tier 3** (rest): Basic info, no web searches, 1 LLM pass
-- **noindex**: Too thin to index, skip LLM calls
-
-Scoring factors:
-- GitHub stars (max 35 pts)
-- HuggingFace downloads (max 35 pts)
-- Category popularity (max 15 pts)
-- Content quality signals (max 10 pts)
-- Existing content quality (max 5 pts)
-- **Umami traffic** (max 25 pts) - percentile-based, auto-adjusts
-
 ## Key Modules
 
-- `v1/maintenance.py`: CLI for tier, tier-traffic, recategorize, deduplicate
-- `v1/quality_tiers.py`: Scoring logic and tier assignment
-- `v1/data_aggregators/umami_aggregator.py`: Umami PostgreSQL queries
-- `v1/content_enhancer_v2.py`: AI content generation
-- `v1/sitemap_builder.py`: Sitemap generation
+- `v1/public_catalog.py`: fixed taxonomy + slim public record projection
+- `v1/editorial.py`: publish policy and junk blocking
+- `v1/maintenance.py`: maintenance CLI, including `slim-reset`
+- `v1/data_manager.py`: tools.json load/save and optimistic merge behavior
+- `v1/sitemap_builder.py`: sitemap generation
+- `v1/web.py`: public directory pages

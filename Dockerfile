@@ -13,7 +13,6 @@ RUN pip install uv
 # Copy all necessary files for package installation
 COPY pyproject.toml uv.lock ./
 COPY ai_tools_website ./ai_tools_website/
-COPY scripts ./scripts/
 
 # Install dependencies
 RUN uv sync

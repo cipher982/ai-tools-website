@@ -1,302 +1,132 @@
 # AI Tools Website
 
-A modern Python web application for aggregating and browsing AI tools. Built with FastHTML for the frontend and featuring AI-powered search capabilities.
+Slim AI/LLM product directory at `drose.io/aitools`.
 
-## Reset In Progress
+This repo is being reset from an autonomous content machine into a simple directory for basic SEO. The canonical reset spec lives in [SLIM_DIRECTORY_RESET.md](SLIM_DIRECTORY_RESET.md).
 
-This project is being simplified from a broad autonomous directory into a slim AI/LLM product list for basic SEO.
+## Product Scope
 
-Canonical reset spec:
+The live product is intentionally narrow:
 
-- [SLIM_DIRECTORY_RESET.md](SLIM_DIRECTORY_RESET.md)
+- homepage
+- fixed category pages
+- tool pages
+- honest sitemap freshness
 
-### 🌐 Live at: [drose.io/aitools](https://drose.io/aitools)
-[![Status](https://img.shields.io/uptimerobot/status/m798586414-bbbff2fcd214a94434a62dc7)](https://stats.uptimerobot.com/Jlo4zDIBm8)
-[![Uptime](https://img.shields.io/uptimerobot/ratio/30/m798586414-bbbff2fcd214a94434a62dc7)](https://stats.uptimerobot.com/Jlo4zDIBm8)
+Published tools are projected into a thin public record:
 
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-312/)
-[![FastHTML](https://img.shields.io/badge/frontend-FastHTML-orange.svg)](https://github.com/davidrose/fasthtml)
-[![OpenAI](https://img.shields.io/badge/AI-OpenAI-green.svg)](https://openai.com/)
-[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![UV](https://img.shields.io/badge/package%20manager-uv-4A4A4A.svg)](https://github.com/astral-sh/uv)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+- `name`
+- `slug`
+- `canonical_url`
+- `summary`
+- `category`
+- `tags`
+- `source_type`
+- `source_url`
+- `metrics`
+- `status`
+- `risk_flags`
+- `discovered_at`
+- `updated_at`
+- `content_hash`
 
-## Overview
+The projection logic lives in `ai_tools_website/v1/public_catalog.py`.
 
-The AI Tools Website aggregates various AI tools and presents them in a responsive, searchable interface. Recent refactoring has separated core functionalities into distinct modules—web, search, logging, data management, and storage—to better organize and scale the application.
+## Architecture
 
-## Key Features
+- `web` container: FastHTML app serving the directory
+- `updater` container: UV environment used by Sauron for explicit maintenance commands
+- storage: MinIO in production, local JSON in development
+- deployment: Coolify on `clifford`
 
-- **Modular Architecture:** Separation of concerns across data processing, logging, search, and storage.
-- **Modern Tech Stack:** Built with FastHTML for server-side rendering.
-- **Enhanced Search:** AI-powered search with support for OpenAI and Tavily integrations.
-- **Flexible Storage:** Supports both local storage and Minio S3-compatible storage.
-- **Robust Logging:** Improved logging configuration for easier debugging and monitoring.
-- **Efficient Dependency Management:** UV used for dependency synchronization and task execution.
+The web process keeps an in-memory tools cache. After changing `tools.json`, redeploy the app or hit the homepage to refresh public listings.
 
-## Project Structure
+## Runtime Scope
 
-```
-.
-├── ai_tools_website/        # Main application package
-│   ├── __init__.py         # Package initializer
-│   ├── config.py           # Application configuration
-│   ├── data_manager.py     # Data processing and validation
-│   ├── logging_config.py   # Logging configuration
-│   ├── search.py           # AI-powered search implementation
-│   ├── storage.py          # Storage interfaces (local/Minio)
-│   ├── web.py             # FastHTML web server
-│   ├── utils/             # Utility functions
-│   └── static/            # Client-side assets
-│
-├── scripts/                # Automation scripts
-│   ├── crontab            # Scheduled task configuration
-│   └── run-update.sh      # Tool update script
-│
-├── data/                  # Data storage directory
-├── logs/                  # Application logs
-│
-├── docker-compose.yml     # Docker Compose configuration
-├── Dockerfile            # Web service container
-├── Dockerfile.updater    # Update service container
-├── pyproject.toml        # Python project configuration
-└── uv.lock              # UV dependency lock file
-```
+Still part of the intended runtime:
 
-## How It Works
+- public page rendering
+- publish policy and junk blocking
+- slim-record projection
+- sitemap generation
+- Umami tracking
 
-1. **Web Interface:** 
-   - The FastHTML server (web.py) renders a responsive UI with real-time client-side search.
-2. **Data Management & Search:** 
-   - Data is processed and validated in data_manager.py.
-   - search.py leverages AI integrations to provide enhanced search functionality.
-3. **Storage & Logging:** 
-   - storage.py handles file storage, supporting local and Minio backends.
-   - logging_config.py sets up comprehensive logging for monitoring and debugging.
+Retired from the intended runtime:
 
-## Technical Details
+- autonomous editorial loop
+- enhancement jobs
+- comparison generation
+- daily recategorization and tier churn
+- AI-written digest emails
 
-### AI-Powered Tool Discovery
-The system uses a multi-stage pipeline for discovering and validating AI tools:
+Legacy modules still exist in the repo for now, but they are not part of the slim-directory production loop.
 
-1. **Search Integration**
-   - Uses Tavily API for initial tool discovery
-   - Focuses on high-quality domains (github.com, producthunt.com, huggingface.co, replicate.com)
-   - Implements caching in development mode for faster iteration
+## Scheduled Jobs
 
-2. **Validation Pipeline**
-   - Multi-stage verification using LLMs:
-     - Initial filtering of search results (confidence threshold: 80%)
-     - Page content analysis and verification (confidence threshold: 90%)
-     - Category assignment based on existing tool context
-   - URL validation to filter out listing/search pages
-   - Async processing for improved performance
+Current production jobs:
 
-3. **Deduplication System**
-   - Two-pass deduplication:
-     - Quick URL-based matching
-     - LLM-based semantic comparison for similar tools
-   - Confidence-based decision making for updates vs. new entries
-   - Smart merging of tool information when duplicates found
+- `aitools-sitemaps`
+- `aitools-umami-watchdog`
 
-4. **Data Models**
-   - `ToolUpdate`: Tracks tool verification decisions
-   - `SearchAnalysis`: Manages search result analysis
-   - `DuplicateStatus`: Handles deduplication decisions
-   - Strong typing with Pydantic for data validation
+Disabled jobs:
 
-5. **Categorization**
-   - Dynamic category management
-   - LLM-powered category suggestions
-   - Supported categories:
-     - Language Models
-     - Image Generation
-     - Audio & Speech
-     - Video Generation
-     - Developer Tools
-     - Other
+- `aitools-discovery`
+- `aitools-editorial-loop`
+- `aitools-enhancement`
+- `aitools-comparisons`
+- `aitools-tier-traffic`
+- `aitools-digest`
 
-### Background Update Process
-The updater service (`Dockerfile.updater`) implements:
-1. Scheduled tool discovery using supercronic
-2. Automatic deduplication of new entries
-3. Health monitoring of the update process
-4. Configurable update frequency via crontab
-
-### Content Enhancement Process
-- Weekly Supercronic job calls `run-enhancement.sh`, which executes `uv run python -m ai_tools_website.v1.content_enhancer_v2` inside the updater container.
-- The V2 enhancer uses a multi-stage pipeline (Tavily search + LLM analysis) to enrich tool records with detailed information, installation commands, and feature lists.
-- **Quality Tiering:** Tools are automatically assigned to tiers (Tier 1, Tier 2, Tier 3, or noindex) based on importance signals like GitHub stars and HuggingFace downloads. This ensures resources are focused on high-value tools.
-- Regeneration limits (`CONTENT_ENHANCER_MAX_PER_RUN`) are configurable. `CONTENT_ENHANCER_MODEL` **must** be set in the environment.
-
-### Storage Implementation
-The system implements a flexible storage system:
-
-1. **Minio Integration**
-   - S3-compatible object storage
-   - Automatic bucket creation and management
-   - LRU caching for improved read performance
-   - Graceful handling of initialization (empty data)
-   - Content-type aware storage (application/json)
-
-2. **Data Format**
-   - JSON-based storage for flexibility
-   - Schema:
-     ```json
-     {
-       "tools": [
-         {
-           "name": "string",
-           "description": "string",
-           "url": "string",
-           "category": "string"
-         }
-       ],
-       "last_updated": "string"
-     }
-     ```
-   - Atomic updates with cache invalidation
-   - Error handling for storage operations
-
-3. **Development Features**
-   - Local filesystem fallback
-   - Development mode caching
-   - Configurable secure/insecure connections
-   - Comprehensive logging of storage operations
-
-### Web Implementation
-The frontend is built with FastHTML for efficient server-side rendering:
-
-1. **Architecture**
-   - Server-side rendering with FastHTML components
-   - Async request handling with uvicorn
-   - In-memory caching with background refresh
-   - Health check endpoint for monitoring
-
-2. **UI Components**
-   - Responsive grid layout for tool cards
-   - Real-time client-side search filtering
-   - Category-based organization
-   - Dynamic tool count display
-   - GitHub integration corner
-
-3. **Performance Features**
-   - Background cache refresh mechanism
-   - Efficient DOM updates via client-side JS
-   - Static asset serving (CSS, JS, images)
-   - Optimized search with data attributes
-
-4. **Development Mode**
-   - Hot reload support
-   - Configurable port via environment
-   - Static file watching
-   - Detailed request logging
-
-## Quick Start
+## Local Development
 
 ```bash
-# Install UV if you haven't already
-pip install uv
-
-# Install dependencies
 uv sync
-
-# Set up environment variables (copy from .env.example)
-cp .env.example .env
-
-# Run the web server
-uv run python -m ai_tools_website.web
-
-# Run background search/updater
-uv run python -m ai_tools_website.search
+uv run uvicorn "ai_tools_website.v1.web:app" --reload --host 0.0.0.0 --port 8000
 ```
 
-Visit `https://drose.io/aitools` or `http://localhost:8000` (for local development) in your browser.
+Useful commands:
+
+```bash
+# Project the current dataset into the slim public schema
+uv run python -m ai_tools_website.v1.maintenance slim-reset --dry-run --json-output
+
+# Persist the slim public schema
+uv run python -m ai_tools_website.v1.maintenance slim-reset
+
+# Rebuild sitemaps
+uv run python -m ai_tools_website.v1.sitemap_builder
+
+# Validate changes
+uv run pytest
+uv run ruff check ai_tools_website tests
+```
 
 ## Configuration
 
-The application uses environment variables for configuration. Copy `.env.example` to `.env` and configure the following:
+See `.env.example` for a working baseline. Core runtime settings:
 
-### Core Settings
-- `WEB_PORT`: Web server port (default: 8000)
-- `LOG_LEVEL`: Logging verbosity (default: INFO)
+- `WEB_PORT`
+- `LOG_LEVEL`
+- `BASE_PATH`
+- `SERVICE_URL_WEB`
+- `AITOOLS_STORAGE_BACKEND`
+- `AITOOLS_LOCAL_DATA_DIR`
+- `TOOLS_FILE`
+- `AITOOLS_SLUG_REGISTRY_FILE`
+- `MINIO_ENDPOINT`
+- `MINIO_ACCESS_KEY`
+- `MINIO_SECRET_KEY`
+- `MINIO_BUCKET_NAME`
+- `MINIO_PUBLIC_URL`
+- `UMAMI_WEBSITE_ID`
+- `UMAMI_SCRIPT_SRC`
+- `UMAMI_DOMAINS`
+- `UMAMI_DROSE_ID`
 
-### CLI Flags
-When running the search module:
-- `--cache-searches`: Cache Tavily search results for faster iteration
-- `--dry-run`: Run without saving any changes
+Legacy discovery/editorial/comparison modules still require model and API settings such as `OPENAI_API_KEY`, `TAVILY_API_KEY`, `SEARCH_MODEL`, `MAINTENANCE_MODEL`, `CONTENT_ENHANCER_MODEL`, and `WEB_SEARCH_MODEL`. Those are no longer required for the normal slim-directory runtime.
 
-- `OPENAI_API_KEY`: OpenAI API key for enhanced search
-- `TAVILY_API_KEY`: Tavily API key for additional search features
-- `CONTENT_ENHANCER_MODEL`: Model for content enhancement (required, no default)
-- `SEARCH_MODEL`: Model for search and deduplication (required, no default)
-- `MAINTENANCE_MODEL`: Model for maintenance tasks (required, no default)
-- `WEB_SEARCH_MODEL`: Model for web search API calls (required, no default)
-- `LANGCHAIN_API_KEY`: Optional LangChain integration
-- `LANGCHAIN_TRACING_V2`: Enable LangChain tracing (default: false)
-- `LANGCHAIN_PROJECT`: LangChain project name
+## Deployment Notes
 
-### Storage Configuration
-- `AITOOLS_STORAGE_BACKEND`: Storage backend (`minio` or `local`, default: `minio`)
-- `AITOOLS_LOCAL_DATA_DIR`: Local storage directory for tools/comparisons (default: `dev_cache`)
-- `TOOLS_FILE`: Path to tools data file when using local storage
-- `AITOOLS_SLUG_REGISTRY_FILE`: Optional slug registry path for local storage
-
-#### Minio Storage (optional)
-If using Minio for storage, configure:
-- `MINIO_ENDPOINT`: Minio server endpoint
-- `MINIO_ACCESS_KEY`: Minio access key
-- `MINIO_SECRET_KEY`: Minio secret key
-- `MINIO_BUCKET_NAME`: Bucket name for tool storage
-
-See `.env.example` for a template with default values.
-
-## Recent Improvements
-
-- Refactored the codebase to separate concerns:
-  - data_manager.py now handles data processing and validation.
-  - search.py is refactored for clarity and integration with AI services.
-  - Improved logging configuration in logging_config.py.
-  - Enhanced storage interface in storage.py to support multiple backends.
-- Adopted UV for dependency management and task execution best practices.
-
-## Deployment
-
-The application is containerized using Docker with two services:
-
-1. **Web Service**
-   - Serves the main web application
-   - Built from `Dockerfile`
-   - Exposes the configured web port
-   - Includes health checks for reliability
-
-2. **Updater Service**
-   - Runs scheduled tool updates using supercronic
-   - Built from `Dockerfile.updater`
-   - Automatically keeps tool data fresh
-   - Includes health monitoring
-
-### Sitemap Publishing
-
-- Nightly sitemap exports run inside the updater container via `run-sitemaps.sh` (scheduled in `scripts/crontab` at 05:00 UTC).
-- You can generate the XML bundle manually with `uv run python -m ai_tools_website.v1.sitemap_builder --dry-run` or omit `--dry-run` to publish directly to MinIO.
-- Sitemaps are stored under the `sitemaps/` prefix in object storage and served through `/sitemap.xml` plus `/sitemaps/<file>.xml` routes.
-
-To deploy using Docker Compose:
-
-```bash
-# Build and start all services
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Stop services
-docker compose down
-```
-
-Make sure to configure your `.env` file before deployment. See Configuration section above for required variables.
-
-## License
-
-This project is licensed under the [Apache License 2.0](LICENSE).
+- Coolify deploys both the web container and the updater container.
+- Sauron executes maintenance commands inside the updater container with `docker exec`.
+- Container-to-LiteLLM traffic should use `http://litellm-proxy:4000`, not the public hostname.
