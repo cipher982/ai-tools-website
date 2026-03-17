@@ -2,6 +2,14 @@
 
 A modern Python web application for aggregating and browsing AI tools. Built with FastHTML for the frontend and featuring AI-powered search capabilities.
 
+## Reset In Progress
+
+This project is being simplified from a broad autonomous directory into a slim AI/LLM product list for basic SEO.
+
+Canonical reset spec:
+
+- [SLIM_DIRECTORY_RESET.md](SLIM_DIRECTORY_RESET.md)
+
 ### 🌐 Live at: [drose.io/aitools](https://drose.io/aitools)
 [![Status](https://img.shields.io/uptimerobot/status/m798586414-bbbff2fcd214a94434a62dc7)](https://stats.uptimerobot.com/Jlo4zDIBm8)
 [![Uptime](https://img.shields.io/uptimerobot/ratio/30/m798586414-bbbff2fcd214a94434a62dc7)](https://stats.uptimerobot.com/Jlo4zDIBm8)
