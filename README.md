@@ -144,6 +144,7 @@ Core runtime settings:
 - `UMAMI_WEBSITE_ID`
 - `UMAMI_SCRIPT_SRC`
 - `UMAMI_DOMAINS`
+- `UMAMI_TAG`
 - `UMAMI_DROSE_ID`
 
 Legacy discovery and content-generation modules still reference model and API settings such as `OPENAI_API_KEY`, `TAVILY_API_KEY`, `SEARCH_MODEL`, `MAINTENANCE_MODEL`, `CONTENT_ENHANCER_MODEL`, and `WEB_SEARCH_MODEL`. Those are not required for the normal slim-directory runtime.

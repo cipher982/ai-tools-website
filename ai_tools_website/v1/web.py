@@ -79,6 +79,7 @@ BASE_PATH = os.getenv("BASE_PATH", "").rstrip("/")
 UMAMI_WEBSITE_ID = os.getenv("UMAMI_WEBSITE_ID", "")
 UMAMI_SCRIPT_SRC = os.getenv("UMAMI_SCRIPT_SRC", "https://analytics.drose.io/script.js")
 UMAMI_DOMAINS = os.getenv("UMAMI_DOMAINS", "drose.io")
+UMAMI_TAG = os.getenv("UMAMI_TAG", "prod")
 UMAMI_DROSE_ID = os.getenv("UMAMI_DROSE_ID", "33e9b5a0-5fbf-474c-9d60-9bee34d577bd")
 
 # MinIO public endpoint for screenshots
@@ -94,18 +95,39 @@ def umami_scripts() -> list:
     if not UMAMI_WEBSITE_ID:
         return []
 
+    recorder_src = UMAMI_SCRIPT_SRC.replace("script.js", "recorder.js")
     return [
         # Project-specific tracking
         Script(
             defer=True,
             src=UMAMI_SCRIPT_SRC,
-            **{"data-website-id": UMAMI_WEBSITE_ID, "data-domains": UMAMI_DOMAINS},
+            **{
+                "data-website-id": UMAMI_WEBSITE_ID,
+                "data-domains": UMAMI_DOMAINS,
+                "data-tag": UMAMI_TAG,
+                "data-performance": "true",
+            },
+        ),
+        Script(
+            defer=True,
+            src=recorder_src,
+            **{
+                "data-website-id": UMAMI_WEBSITE_ID,
+                "data-sample-rate": "1",
+                "data-mask-level": "moderate",
+                "data-max-duration": "1800000",
+            },
         ),
         # Domain aggregate tracking (counts toward total drose.io traffic)
         Script(
             defer=True,
             src=UMAMI_SCRIPT_SRC,
-            **{"data-website-id": UMAMI_DROSE_ID, "data-domains": UMAMI_DOMAINS},
+            **{
+                "data-website-id": UMAMI_DROSE_ID,
+                "data-domains": UMAMI_DOMAINS,
+                "data-tag": UMAMI_TAG,
+                "data-performance": "true",
+            },
         ),
     ]
 
