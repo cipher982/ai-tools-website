@@ -210,7 +210,7 @@ def drose_aggregate_identify_script():
         keepalive: true,
         method: "POST",
         credentials: "omit",
-        headers: {{ "Content-Type": "application/json" }},
+        headers: {{ "Content-Type": "application/json", "x-umami-cache": "" }},
         body: JSON.stringify({{ type: "identify", payload: payload }})
       }}).catch(function () {{ sent = false; }});
     }} catch (e) {{}}

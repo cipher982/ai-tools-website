@@ -210,6 +210,7 @@ class TestRoutes:
 
         assert "drose.visitor_id" in html
         assert "context_source" in html
+        assert "x-umami-cache" in html
         assert "https://analytics.drose.io/api/send" in html
         assert 'var websiteId = "drose-site"' in html
         assert 'data-website-id="aitools-site"' in html
