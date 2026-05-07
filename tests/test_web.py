@@ -6,6 +6,7 @@ import os
 os.environ["BASE_PATH"] = "/aitools"
 
 import pytest  # noqa: E402
+from fastcore.xml import to_xml  # noqa: E402
 from starlette.testclient import TestClient  # noqa: E402
 
 from ai_tools_website.v1 import web as web_module  # noqa: E402
@@ -196,6 +197,24 @@ class TestRoutes:
         response = client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
+
+    def test_umami_scripts_send_drose_aggregate_identify(self, monkeypatch):
+        """Dual tracking includes direct identify for the drose aggregate site."""
+        monkeypatch.setattr(web_module, "UMAMI_WEBSITE_ID", "aitools-site")
+        monkeypatch.setattr(web_module, "UMAMI_DROSE_ID", "drose-site")
+        monkeypatch.setattr(web_module, "UMAMI_SCRIPT_SRC", "https://analytics.drose.io/script.js")
+        monkeypatch.setattr(web_module, "UMAMI_DOMAINS", "drose.io")
+        monkeypatch.setattr(web_module, "UMAMI_TAG", "prod")
+
+        html = "".join(to_xml(script) for script in web_module.umami_scripts())
+
+        assert "drose.visitor_id" in html
+        assert "context_source" in html
+        assert "https://analytics.drose.io/api/send" in html
+        assert 'var websiteId = "drose-site"' in html
+        assert 'data-website-id="aitools-site"' in html
+        assert 'data-website-id="drose-site"' in html
+        assert html.index("drose.visitor_id") < html.index('data-website-id="aitools-site"')
 
 
 class TestEditorialVisibility:

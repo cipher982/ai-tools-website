@@ -87,6 +87,146 @@ MINIO_PUBLIC_URL = os.getenv("MINIO_PUBLIC_URL", "https://minio.drose.io")
 MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "aitools")
 
 
+def drose_aggregate_identify_script():
+    """Send visitor context to the drose.io aggregate tracker.
+
+    Umami exposes only one global `window.umami` helper, so dual-tracked pages
+    cannot reliably call `identify()` for both the project and drose aggregate
+    trackers. Post the aggregate identify payload directly to Umami instead.
+    """
+    if not UMAMI_DROSE_ID:
+        return None
+
+    api_url = f"{UMAMI_SCRIPT_SRC.rsplit('/', 1)[0]}/api/send"
+    domains = [domain.strip() for domain in UMAMI_DOMAINS.split(",") if domain.strip()]
+    script = f"""
+(function () {{
+  var sent = false;
+  var websiteId = {json.dumps(UMAMI_DROSE_ID)};
+  var apiUrl = {json.dumps(api_url)};
+  var tag = {json.dumps(UMAMI_TAG or None)};
+  var domains = {json.dumps(domains)};
+  function domainAllowed() {{
+    if (!domains.length) return true;
+    for (var i = 0; i < domains.length; i++) {{
+      if (location.hostname === domains[i]) return true;
+    }}
+    return false;
+  }}
+  function getVisitorId() {{
+    try {{
+      var key = "drose.visitor_id";
+      var existing = localStorage.getItem(key);
+      if (existing) return existing;
+      var random = crypto && crypto.randomUUID
+        ? crypto.randomUUID()
+        : String(Date.now()) + Math.random().toString(36).slice(2);
+      var id = "dv_" + random.replace(/[^a-zA-Z0-9]/g, "").slice(0, 47);
+      localStorage.setItem(key, id);
+      return id;
+    }} catch (e) {{
+      return undefined;
+    }}
+  }}
+  function bucketViewport() {{
+    var width = window.innerWidth || 0;
+    if (width >= 1440) return "desktop_wide";
+    if (width >= 1024) return "desktop";
+    if (width >= 768) return "tablet";
+    return "mobile";
+  }}
+  function bucketSource() {{
+    var ref = document.referrer || "";
+    var params = new URLSearchParams(location.search);
+    var source = (params.get("utm_source") || "").toLowerCase();
+    if (source) return source;
+    if (!ref) return "direct";
+    var host = "";
+    try {{ host = new URL(ref).hostname.toLowerCase(); }} catch (e) {{}}
+    if (/chatgpt|perplexity|claude|gemini|copilot/.test(host)) return "ai";
+    if (/google|bing|duckduckgo|brave|yahoo|yandex|ecosia/.test(host)) return "search";
+    if (/x\\.com|twitter|facebook|instagram|linkedin|reddit|threads|tiktok|bsky/.test(host)) return "social";
+    if (/localhost|127\\.0\\.0\\.1|drose\\.local|ts\\.net/.test(host)) return "dev";
+    return "other";
+  }}
+  function trafficQuality() {{
+    var ua = navigator.userAgent || "";
+    if (/HeadlessChrome|Playwright|Puppeteer|Selenium/i.test(ua)) return "headless_hint";
+    if (/UptimeRobot|Pingdom|Better Stack|StatusCake|Healthchecks/i.test(ua)) return "monitor_hint";
+    if (/localhost|127\\.0\\.0\\.1|\\.local$/.test(location.hostname)) return "dev";
+    return "human";
+  }}
+  function landingPath() {{
+    try {{
+      if (!sessionStorage.getItem("drose.landing_path")) {{
+        sessionStorage.setItem("drose.landing_path", location.pathname);
+      }}
+      return sessionStorage.getItem("drose.landing_path") || location.pathname;
+    }} catch (e) {{
+      return location.pathname;
+    }}
+  }}
+  function externalReferrer() {{
+    var ref = document.referrer || "";
+    if (!ref) return "";
+    try {{
+      return new URL(ref).origin === location.origin ? "" : ref;
+    }} catch (e) {{
+      return ref;
+    }}
+  }}
+  function send() {{
+    if (sent || !domainAllowed() || typeof fetch !== "function") return;
+    try {{
+      var nav = navigator;
+      var connection = nav.connection || nav.mozConnection || nav.webkitConnection;
+      var visitorId = getVisitorId();
+      var data = {{
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown",
+        timezone_offset: new Date().getTimezoneOffset(),
+        viewport: bucketViewport(),
+        pixel_ratio: Math.round((window.devicePixelRatio || 1) * 100) / 100,
+        touch: (nav.maxTouchPoints || 0) > 0,
+        connection: connection && connection.effectiveType ? connection.effectiveType : "unknown",
+        source_bucket: bucketSource(),
+        traffic_quality: trafficQuality(),
+        landing_path: landingPath(),
+        context_source: "aitools"
+      }};
+      var payload = {{
+        website: websiteId,
+        screen: (screen.width || 0) + "x" + (screen.height || 0),
+        language: nav.language,
+        title: document.title,
+        hostname: location.hostname,
+        url: location.href,
+        referrer: externalReferrer(),
+        tag: tag || undefined,
+        data: data
+      }};
+      if (visitorId) payload.id = visitorId;
+      sent = true;
+      fetch(apiUrl, {{
+        keepalive: true,
+        method: "POST",
+        credentials: "omit",
+        headers: {{ "Content-Type": "application/json" }},
+        body: JSON.stringify({{ type: "identify", payload: payload }})
+      }}).catch(function () {{ sent = false; }});
+    }} catch (e) {{}}
+  }}
+  send();
+  try {{
+    window.addEventListener("pageshow", send);
+    document.addEventListener("visibilitychange", function () {{
+      if (document.visibilityState === "visible") send();
+    }});
+  }} catch (e) {{}}
+}})();
+"""
+    return Script(script)
+
+
 def umami_scripts() -> list:
     """Generate Umami analytics scripts for dual tracking (project + drose.io aggregate).
 
@@ -96,7 +236,9 @@ def umami_scripts() -> list:
         return []
 
     recorder_src = UMAMI_SCRIPT_SRC.replace("script.js", "recorder.js")
-    return [
+    scripts = [
+        # Direct aggregate identify for session_data on drose.io rollups.
+        drose_aggregate_identify_script(),
         # Project-specific tracking
         Script(
             defer=True,
@@ -130,6 +272,7 @@ def umami_scripts() -> list:
             },
         ),
     ]
+    return [script for script in scripts if script is not None]
 
 
 # Simple global cache
