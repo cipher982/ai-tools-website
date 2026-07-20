@@ -435,6 +435,20 @@ pre code {
     color: var(--muted);
 }
 
+.site-footer {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.site-footer a {
+    color: var(--text);
+    font-weight: 650;
+}
+
 /* Enhanced content indicators */
 .data-freshness {
     margin-top: var(--spacing-xl);

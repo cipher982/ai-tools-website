@@ -1,0 +1,19 @@
+# AI Tools Directory
+
+> A curated directory of AI and LLM products maintained by AI engineer David Rose at drose.io.
+
+Use the directory to find official product and source links, short factual summaries, fixed categories, and structured metrics when available. The directory describes third-party products; David Rose is the directory curator, not the creator of the listed tools.
+
+## Directory
+
+- [AI Tools Directory](https://drose.io/aitools): Browse and search the full public catalog.
+- [AI Apps](https://drose.io/aitools/category/ai-apps): End-user AI applications.
+- [Code Assistants](https://drose.io/aitools/category/code-assistants): AI coding and engineering tools.
+- [Model Platforms](https://drose.io/aitools/category/model-platforms): Model providers and AI platforms.
+- [Agent Tools](https://drose.io/aitools/category/agent-tools): Agentic workflow products.
+
+## About
+
+- [David Rose](https://drose.io): Directory curator; AI engineer working on LLMs and agentic systems.
+- [David Rose on GitHub](https://github.com/cipher982): Public projects and source repositories.
+- [XML sitemap](https://drose.io/aitools/sitemap.xml): Complete index of published directory pages.

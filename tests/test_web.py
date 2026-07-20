@@ -180,6 +180,20 @@ class TestRoutes:
         assert 'rel="canonical"' in response.text
         assert "https://drose.io/aitools" in response.text
 
+    def test_homepage_has_visible_creator_and_structured_identity(self, editorial_client):
+        response = editorial_client.get("/")
+        assert "Curated by" in response.text
+        assert "David Rose" in response.text
+        assert '"creator"' in response.text
+        assert "https://github.com/cipher982" in response.text
+
+    def test_llms_txt_is_plain_text_and_links_canonical_pages(self, editorial_client):
+        response = editorial_client.get("/llms.txt")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/plain")
+        assert response.text.startswith("# AI Tools Directory")
+        assert "https://drose.io/aitools/sitemap.xml" in response.text
+
     def test_comparisons_hub_returns_200(self, client):
         """Comparisons hub should be retired."""
         response = client.get("/comparisons")

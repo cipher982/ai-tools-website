@@ -82,6 +82,35 @@ UMAMI_DOMAINS = os.getenv("UMAMI_DOMAINS", "drose.io")
 UMAMI_TAG = os.getenv("UMAMI_TAG", "prod")
 UMAMI_DROSE_ID = os.getenv("UMAMI_DROSE_ID", "33e9b5a0-5fbf-474c-9d60-9bee34d577bd")
 
+CREATOR_URL = "https://drose.io"
+CREATOR_GITHUB_URL = "https://github.com/cipher982"
+
+
+def creator_schema() -> dict:
+    """Return the stable creator identity shared by directory metadata."""
+    return {
+        "@type": "Person",
+        "@id": f"{CREATOR_URL}/#person",
+        "name": "David Rose",
+        "url": CREATOR_URL,
+        "sameAs": [CREATOR_GITHUB_URL, "https://www.linkedin.com/in/david-w-rose/"],
+        "jobTitle": "AI Engineer",
+    }
+
+
+def site_footer():
+    """Visible ownership links for every public directory page."""
+    return Div(
+        "Curated by ",
+        A("David Rose", href=CREATOR_URL, rel="author me"),
+        ", AI engineer. ",
+        A("GitHub", href=CREATOR_GITHUB_URL, rel="me"),
+        " · ",
+        A("About the curator", href=CREATOR_URL),
+        _class="site-footer",
+    )
+
+
 # MinIO public endpoint for screenshots
 MINIO_PUBLIC_URL = os.getenv("MINIO_PUBLIC_URL", "https://minio.drose.io")
 MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "aitools")
@@ -1644,6 +1673,20 @@ async def get():
             Meta({"name": "twitter:card", "content": "summary_large_image"}),
             Meta({"name": "twitter:title", "content": meta_title}),
             Meta({"name": "twitter:description", "content": meta_desc}),
+            Script(
+                json.dumps(
+                    {
+                        "@context": "https://schema.org",
+                        "@type": "WebSite",
+                        "@id": "https://drose.io/aitools/#website",
+                        "name": "AI Tools Directory",
+                        "url": "https://drose.io/aitools",
+                        "description": meta_desc,
+                        "creator": creator_schema(),
+                    }
+                ),
+                type="application/ld+json",
+            ),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
             *umami_scripts(),
         ),
@@ -1658,6 +1701,7 @@ async def get():
                 Div(*category_links, _class="breadcrumbs"),
                 Input({"type": "search", "id": "search", "placeholder": "Search tools...", "_id": "search"}),
                 *sections,
+                site_footer(),
                 _class="main-window",
             ),
             Script(src="search.js"),
@@ -1759,6 +1803,7 @@ async def get_tool_page(slug: str):
                     else None,
                     _class="tool-layout",
                 ),
+                site_footer(),
                 _class="main-window",
             )
         ),
@@ -1864,6 +1909,7 @@ async def get_category_page(category_slug: str):
                 ),
                 # Tools grid
                 category_section(category_name, tools, use_internal_links=True),
+                site_footer(),
                 _class="main-window",
             )
         ),
