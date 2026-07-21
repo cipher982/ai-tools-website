@@ -84,6 +84,7 @@ UMAMI_DROSE_ID = os.getenv("UMAMI_DROSE_ID", "33e9b5a0-5fbf-474c-9d60-9bee34d577
 
 CREATOR_URL = "https://drose.io"
 CREATOR_GITHUB_URL = "https://github.com/cipher982"
+CREATOR_NAME = "David W. Rose"
 
 
 def creator_schema() -> dict:
@@ -91,10 +92,10 @@ def creator_schema() -> dict:
     return {
         "@type": "Person",
         "@id": f"{CREATOR_URL}/#person",
-        "name": "David Rose",
+        "name": CREATOR_NAME,
+        "alternateName": ["David Rose", "cipher982"],
         "url": CREATOR_URL,
         "sameAs": [CREATOR_GITHUB_URL, "https://www.linkedin.com/in/david-w-rose/"],
-        "jobTitle": "AI Engineer",
     }
 
 
@@ -102,9 +103,11 @@ def site_footer():
     """Visible ownership links for every public directory page."""
     return Div(
         "Curated by ",
-        A("David Rose", href=CREATOR_URL, rel="author me"),
-        ", AI engineer. ",
-        A("GitHub", href=CREATOR_GITHUB_URL, rel="me"),
+        A(CREATOR_NAME, href=CREATOR_URL, rel="author me"),
+        " (",
+        A("cipher982", href=CREATOR_GITHUB_URL, rel="me"),
+        "). ",
+        A("GitHub", href=CREATOR_GITHUB_URL),
         " · ",
         A("About the curator", href=CREATOR_URL),
         _class="site-footer",

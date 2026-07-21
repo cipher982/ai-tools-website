@@ -183,7 +183,8 @@ class TestRoutes:
     def test_homepage_has_visible_creator_and_structured_identity(self, editorial_client):
         response = editorial_client.get("/")
         assert "Curated by" in response.text
-        assert "David Rose" in response.text
+        assert "David W. Rose" in response.text
+        assert "cipher982" in response.text
         assert '"creator"' in response.text
         assert "https://github.com/cipher982" in response.text
 

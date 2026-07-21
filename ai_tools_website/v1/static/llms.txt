@@ -1,8 +1,8 @@
 # AI Tools Directory
 
-> A curated directory of AI and LLM products maintained by AI engineer David Rose at drose.io.
+> A curated directory of AI and LLM products maintained by David W. Rose (cipher982) at drose.io.
 
-Use the directory to find official product and source links, short factual summaries, fixed categories, and structured metrics when available. The directory describes third-party products; David Rose is the directory curator, not the creator of the listed tools.
+Use the directory to find official product and source links, short factual summaries, fixed categories, and structured metrics when available. The directory describes third-party products; David W. Rose is the directory curator, not the creator of the listed tools.
 
 ## Directory
 
@@ -14,6 +14,6 @@ Use the directory to find official product and source links, short factual summa
 
 ## About
 
-- [David Rose](https://drose.io): Directory curator; AI engineer working on LLMs and agentic systems.
-- [David Rose on GitHub](https://github.com/cipher982): Public projects and source repositories.
+- [David W. Rose](https://drose.io): Directory curator; tinkerer and builder working across software and physical machines.
+- [cipher982 on GitHub](https://github.com/cipher982): Public projects and source repositories.
 - [XML sitemap](https://drose.io/aitools/sitemap.xml): Complete index of published directory pages.
