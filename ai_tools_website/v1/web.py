@@ -101,15 +101,24 @@ def creator_schema() -> dict:
 
 def site_footer():
     """Visible ownership links for every public directory page."""
+
+    def identity_attrs(destination: str) -> dict[str, str]:
+        return {
+            "data-umami-event": "identity_link_click",
+            "data-umami-event-source": "ai_tools",
+            "data-umami-event-placement": "footer",
+            "data-umami-event-destination": destination,
+        }
+
     return Div(
         "Curated by ",
-        A(CREATOR_NAME, href=CREATOR_URL, rel="author me"),
+        A(CREATOR_NAME, href=CREATOR_URL, rel="author me", **identity_attrs("drose_home")),
         " (",
-        A("cipher982", href=CREATOR_GITHUB_URL, rel="me"),
+        A("cipher982", href=CREATOR_GITHUB_URL, rel="me", **identity_attrs("github_profile")),
         "). ",
-        A("GitHub", href=CREATOR_GITHUB_URL),
+        A("GitHub", href=CREATOR_GITHUB_URL, **identity_attrs("github_profile")),
         " · ",
-        A("About the curator", href=CREATOR_URL),
+        A("About the curator", href=CREATOR_URL, **identity_attrs("drose_home")),
         _class="site-footer",
     )
 

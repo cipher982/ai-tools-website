@@ -134,8 +134,10 @@ class TestTrailingSlashMiddleware:
     """Tests for the trailing slash redirect middleware."""
 
     @pytest.fixture
-    def client(self):
+    def client(self, monkeypatch):
         """Create a test client for the app."""
+        web_module.tools_cache.clear()
+        monkeypatch.setattr(web_module, "load_tools", lambda: {"tools": []})
         return TestClient(app, raise_server_exceptions=False)
 
     def test_trailing_slash_redirects(self, client):
@@ -164,8 +166,10 @@ class TestRoutes:
     """Tests for web routes."""
 
     @pytest.fixture
-    def client(self):
+    def client(self, monkeypatch):
         """Create a test client for the app."""
+        web_module.tools_cache.clear()
+        monkeypatch.setattr(web_module, "load_tools", lambda: {"tools": []})
         return TestClient(app, raise_server_exceptions=False)
 
     def test_homepage_returns_200(self, client):
@@ -183,6 +187,10 @@ class TestRoutes:
     def test_homepage_has_visible_creator_and_structured_identity(self, editorial_client):
         response = editorial_client.get("/")
         assert "Curated by" in response.text
+        assert response.text.count('data-umami-event="identity_link_click"') == 4
+        assert 'data-umami-event-source="ai_tools"' in response.text
+        assert 'data-umami-event-destination="drose_home"' in response.text
+        assert 'data-umami-event-destination="github_profile"' in response.text
         assert "David W. Rose" in response.text
         assert "cipher982" in response.text
         assert '"creator"' in response.text
