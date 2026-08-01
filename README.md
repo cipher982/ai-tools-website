@@ -28,7 +28,7 @@ The project used to behave like an autonomous content machine. It now does somet
 | Live product | Directory homepage, fixed category pages, tool pages |
 | Stack | FastHTML + Python |
 | Storage | MinIO in production, local JSON in development |
-| Deploy | Coolify on `clifford` |
+| Deploy | Direct Docker/manual-app on `clifford` |
 | Scheduler | Sauron |
 | Active production jobs | `aitools-sitemaps`, `aitools-umami-watchdog` |
 
@@ -151,7 +151,6 @@ Legacy discovery and content-generation modules still reference model and API se
 
 ## Deployment Notes
 
-- Coolify deploys both the web container and the updater container.
+- The manual-app deployment recreates both the web container and the updater container.
 - Sauron executes maintenance commands inside the updater container with `docker exec`.
 - The web process keeps an in-memory tools cache. After changing `tools.json`, redeploy the app or hit the homepage to refresh listings.
-- Container-to-LiteLLM traffic should use `http://litellm-proxy:4000`, not the public hostname.

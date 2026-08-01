@@ -110,14 +110,14 @@ def test_resolve_editorial_max_retries_prefers_env(monkeypatch):
 
 def test_resolve_editorial_client_kwargs_prefers_editorial_env(monkeypatch):
     monkeypatch.setenv("EDITORIAL_OPENAI_API_KEY", "editorial-key")
-    monkeypatch.setenv("EDITORIAL_OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setenv("EDITORIAL_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
     monkeypatch.setenv("EDITORIAL_OPENAI_MAX_RETRIES", "1")
     monkeypatch.setenv("OPENAI_API_KEY", "global-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
     assert resolve_editorial_client_kwargs() == {
         "api_key": "editorial-key",
-        "base_url": "https://llm.drose.io",
+        "base_url": "https://openrouter.ai/api/v1",
         "max_retries": 1,
     }
 
@@ -255,22 +255,22 @@ def test_review_tool_prefers_editorial_client_env(monkeypatch, sample_tool):
         return expected
 
     monkeypatch.setenv("EDITORIAL_OPENAI_API_KEY", "editorial-key")
-    monkeypatch.setenv("EDITORIAL_OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setenv("EDITORIAL_OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
     monkeypatch.setenv("EDITORIAL_OPENAI_MAX_RETRIES", "1")
     monkeypatch.setenv("OPENAI_API_KEY", "global-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
     monkeypatch.setattr("openai.OpenAI", DummyOpenAI)
     monkeypatch.setattr("ai_tools_website.v1.editorial_agent.request_editorial_review", fake_request)
 
-    review = review_tool(sample_tool, model="glm-5", use_web_search=False)
+    review = review_tool(sample_tool, model="deepseek/deepseek-v4-flash", use_web_search=False)
 
     assert review == expected
     assert captured["client_kwargs"] == {
         "api_key": "editorial-key",
-        "base_url": "https://llm.drose.io",
+        "base_url": "https://openrouter.ai/api/v1",
         "max_retries": 1,
     }
-    assert captured["model"] == "glm-5"
+    assert captured["model"] == "deepseek/deepseek-v4-flash"
     assert captured["use_web_search"] is False
 
 
@@ -297,19 +297,19 @@ def test_review_tool_falls_back_to_global_client_env(monkeypatch, sample_tool):
     monkeypatch.delenv("EDITORIAL_OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("EDITORIAL_OPENAI_MAX_RETRIES", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "global-key")
-    monkeypatch.setenv("OPENAI_BASE_URL", "https://llm.drose.io")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
     monkeypatch.setattr("openai.OpenAI", DummyOpenAI)
     monkeypatch.setattr(
         "ai_tools_website.v1.editorial_agent.request_editorial_review",
         lambda client, tool, **kwargs: expected,
     )
 
-    review = review_tool(sample_tool, model="glm-5")
+    review = review_tool(sample_tool, model="deepseek/deepseek-v4-flash")
 
     assert review == expected
     assert captured["client_kwargs"] == {
         "api_key": "global-key",
-        "base_url": "https://llm.drose.io",
+        "base_url": "https://openrouter.ai/api/v1",
         "max_retries": 0,
     }
 

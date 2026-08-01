@@ -6,8 +6,7 @@ AI Tools directory at drose.io/aitools. Slim AI/LLM product directory with homep
 - **Updater container**: UV environment for explicit maintenance commands; Sauron `docker exec`s into it
 - **Storage**: MinIO in production; local JSON in development
 
-Deployed to clifford VPS via Coolify.
-- **LiteLLM from containers:** use `http://litellm-proxy:4000`, not the public `https://llm.drose.io` hostname.
+Deployed to the clifford VPS through the tracked manual-app stack.
 - **Listings cache:** the web process keeps an in-memory tools cache; after `tools.json` edits, redeploy or hit the homepage to refresh public listings.
 
 ## Scheduled Jobs

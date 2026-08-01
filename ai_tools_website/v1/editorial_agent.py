@@ -73,7 +73,7 @@ def resolve_editorial_review_model() -> str:
 
 
 def resolve_editorial_metadata_source() -> str:
-    """Resolve the metadata source required by the LiteLLM proxy."""
+    """Resolve the metadata source sent with the OpenAI-compatible request."""
     return os.getenv("EDITORIAL_METADATA_SOURCE") or DEFAULT_EDITORIAL_METADATA_SOURCE
 
 
