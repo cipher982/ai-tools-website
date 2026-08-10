@@ -4,8 +4,6 @@ import argparse
 import asyncio
 import json
 import logging
-from datetime import datetime
-from datetime import timezone
 from typing import List
 
 from pydantic import BaseModel
@@ -145,7 +143,6 @@ Analyze this categorization and suggest a revised category structure.""",
             logger.info("Auto-accepting changes...")
 
         logger.info("Applying changes...")
-        timestamp = datetime.now(timezone.utc).isoformat()
         updated_tools = []
 
         # Create mapping of old -> new categories
@@ -166,7 +163,6 @@ Analyze this categorization and suggest a revised category structure.""",
                 new_category = tool_map[tool["name"]]
                 if new_category != current_cat:
                     new_tool["category"] = new_category
-                    new_tool["updated_at"] = timestamp
                     moved_count += 1
                     logger.info(f"Moving {tool['name']} to {new_tool['category']}")
             # Check if category should change
@@ -174,7 +170,6 @@ Analyze this categorization and suggest a revised category structure.""",
                 new_category = category_map[current_cat]
                 if new_category != current_cat:
                     new_tool["category"] = new_category
-                    new_tool["updated_at"] = timestamp
                     renamed_count += 1
                     logger.info(f"Updating category for {tool['name']}: {current_cat} -> {new_tool['category']}")
 

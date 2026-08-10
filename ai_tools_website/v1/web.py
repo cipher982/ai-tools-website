@@ -426,6 +426,24 @@ def get_tool_slug(tool: dict) -> str:
     return generate_tool_slug(tool.get("name", ""))
 
 
+# Legacy duplicate slugs (same-name, same-product records) collapsed onto a
+# single canonical slug. Each maps legacy -> canonical so inbound links keep
+# working; the duplicate records themselves are hidden in the catalog.
+LEGACY_DUPLICATE_SLUG_REDIRECTS = {
+    "aider-2": "aider",
+    "github-spark-2": "github-spark",
+    "github-spark-3": "github-spark",
+    "github-spark-4": "github-spark",
+    "github-spark-5": "github-spark",
+    "github-spark-6": "github-spark",
+    "gpt4all-2": "gpt4all",
+    "gpt4all-web-search-beta-release-2": "gpt4all-web-search-beta-release",
+    "kiln-2": "kiln",
+    "openhands-3": "openhands",
+    "yolov8-2": "yolov8",
+}
+
+
 def find_tool_by_slug(slug: str) -> dict:
     """Find tool by its generated slug"""
     all_tools = get_all_tools()
@@ -1716,7 +1734,7 @@ async def get():
                 site_footer(),
                 _class="main-window",
             ),
-            Script(src="search.js"),
+            Script(src=url("/search.js")),
         ),
     )
 
@@ -1726,6 +1744,9 @@ async def get_tool_page(slug: str):
     """Individual tool page with SEO optimization"""
     tool = find_tool_by_slug(slug)
     if not tool:
+        canonical = LEGACY_DUPLICATE_SLUG_REDIRECTS.get(slug)
+        if canonical:
+            return RedirectResponse(status_code=301, url=url(f"/tools/{canonical}"))
         return html_response(
             Html(Head(Title("Tool Not Found")), Body(H1("Tool Not Found"), P(f"No tool found with slug: {slug}"))),
             status_code=404,
