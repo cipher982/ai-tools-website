@@ -431,6 +431,8 @@ def get_tool_slug(tool: dict) -> str:
 # working; the duplicate records themselves are hidden in the catalog.
 LEGACY_DUPLICATE_SLUG_REDIRECTS = {
     "aider-2": "aider",
+    "boltdiy-2": "boltdiy",
+    "boltdiy-3": "boltdiy",
     "github-spark-2": "github-spark",
     "github-spark-3": "github-spark",
     "github-spark-4": "github-spark",
@@ -440,6 +442,7 @@ LEGACY_DUPLICATE_SLUG_REDIRECTS = {
     "gpt4all-web-search-beta-release-2": "gpt4all-web-search-beta-release",
     "kiln-2": "kiln",
     "openhands-3": "openhands",
+    "smolagents-2": "smolagents",
     "yolov8-2": "yolov8",
 }
 
