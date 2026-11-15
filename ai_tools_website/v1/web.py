@@ -1,13 +1,17 @@
 import asyncio
+import copy
 import json
 import logging
 import os
 import re
+import threading
+import time
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
 from typing import Dict
 from typing import List
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 from fastcore.xml import to_xml
@@ -318,8 +322,114 @@ def umami_scripts() -> list:
 
 # Simple global cache
 tools_cache: Dict = {}
+TOOLS_REFRESH_TTL_SECONDS = 300
+PIPELINE_STATUS_CACHE_TTL_SECONDS = 60
+_tools_refresh_at: float | None = None
+_tools_refresh_lock: asyncio.Lock | None = None
+_tools_refresh_lock_loop: asyncio.AbstractEventLoop | None = None
+_pipeline_status_cache: List[Dict] | None = None
+_pipeline_status_cache_at: float | None = None
+_pipeline_status_cache_lock = threading.Lock()
 logger = logging.getLogger(__name__)
 ALLOWED_SITEMAP_FILES = set(SITEMAP_FILES.keys()) | {"sitemap-index.xml"}
+
+
+def _safe_json_ld(payload: object) -> str:
+    """Serialize JSON-LD safely for embedding inside HTML script elements."""
+    return json.dumps(payload).replace("<", r"\u003c")
+
+
+def _safe_external_href(value: object) -> str | None:
+    """Return an HTTP(S) external URL or None if scheme/host is invalid."""
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    parsed = urlsplit(raw)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return None
+    return raw
+
+
+def _get_tools_refresh_lock() -> asyncio.Lock:
+    """Return an asyncio.Lock bound to the current running event loop."""
+    global _tools_refresh_lock
+    global _tools_refresh_lock_loop
+
+    loop = asyncio.get_running_loop()
+    if _tools_refresh_lock is None or _tools_refresh_lock_loop is not loop:
+        _tools_refresh_lock = asyncio.Lock()
+        _tools_refresh_lock_loop = loop
+    return _tools_refresh_lock
+
+
+def _build_tools_by_category() -> Dict:
+    """Load tools from storage and group public records by category."""
+    tools = load_tools()
+    by_category = {}
+    for raw_tool in tools["tools"]:
+        tool = build_public_tool_record(raw_tool)
+        if not is_public_tool(tool):
+            continue
+        category = tool.get("category", "Other")
+        by_category.setdefault(category, []).append(tool)
+    for category, category_tools in by_category.items():
+        by_category[category] = sorted(category_tools, key=lambda tool: tool.get("name", "").lower())
+    return by_category
+
+
+class TrailingSlashMiddleware(BaseHTTPMiddleware):
+    """Redirect trailing-slash URLs to non-trailing-slash with proper BASE_PATH.
+
+    Starlette's default redirect_slashes doesn't know about BASE_PATH when
+    behind a reverse proxy, causing redirects like /tools/foo/ -> /tools/foo
+    instead of /aitools/tools/foo/ -> /aitools/tools/foo.
+    """
+
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        # Skip root path and paths without trailing slash
+        if path != "/" and path.endswith("/"):
+            stripped = path.strip("/")
+            new_path = f"{BASE_PATH}/{stripped}" if stripped else f"{BASE_PATH}/"
+            query = f"?{request.url.query}" if request.url.query else ""
+            return RedirectResponse(url=f"{new_path}{query}", status_code=308)
+        return await call_next(request)
+
+
+def get_tools_by_category() -> Dict:
+    """Get tools from cache, initialize if empty"""
+    global _tools_refresh_at
+
+    if not tools_cache:
+        logger.info("Cache empty, loading tools from disk")
+        by_category = _build_tools_by_category()
+        tools_cache.update(by_category)
+        _tools_refresh_at = time.monotonic()
+        logger.info(f"Loaded {sum(len(tools) for tools in by_category.values())} tools into cache")
+    return tools_cache
+
+
+async def refresh_tools_background():
+    """Background task to refresh tools cache with TTL and lock protection."""
+    global _tools_refresh_at
+
+    if tools_cache and _tools_refresh_at is not None:
+        if (time.monotonic() - _tools_refresh_at) < TOOLS_REFRESH_TTL_SECONDS:
+            return
+
+    async with _get_tools_refresh_lock():
+        if tools_cache and _tools_refresh_at is not None:
+            if (time.monotonic() - _tools_refresh_at) < TOOLS_REFRESH_TTL_SECONDS:
+                return
+
+        logger.info("Starting background cache refresh")
+        by_category = await asyncio.to_thread(_build_tools_by_category)
+        tools_cache.clear()
+        tools_cache.update(by_category)
+        _tools_refresh_at = time.monotonic()
+        logger.info(f"Background refresh complete, cached {sum(len(tools) for tools in by_category.values())} tools")
 
 
 def url(path: str) -> str:
@@ -332,63 +442,6 @@ def url(path: str) -> str:
 def html_response(document, *, status_code: int = 200) -> Response:
     """Render a FastHTML document with an explicit HTTP status code."""
     return Response(to_xml(document), media_type="text/html", status_code=status_code)
-
-
-class TrailingSlashMiddleware(BaseHTTPMiddleware):
-    """Redirect trailing-slash URLs to non-trailing-slash with proper BASE_PATH and HTTPS.
-
-    Starlette's default redirect_slashes doesn't know about BASE_PATH when
-    behind a reverse proxy, causing redirects like /tools/foo/ -> /tools/foo
-    instead of /aitools/tools/foo/ -> /aitools/tools/foo.
-    """
-
-    async def dispatch(self, request, call_next):
-        path = request.url.path
-        # Skip root path and paths without trailing slash
-        if path != "/" and path.endswith("/"):
-            # Build proper redirect URL with BASE_PATH, always HTTPS
-            new_path = BASE_PATH + path.rstrip("/")
-            query = f"?{request.url.query}" if request.url.query else ""
-            redirect_url = f"https://{request.url.netloc}{new_path}{query}"
-            return RedirectResponse(url=redirect_url, status_code=308)
-        return await call_next(request)
-
-
-def get_tools_by_category() -> Dict:
-    """Get tools from cache, initialize if empty"""
-    if not tools_cache:
-        logger.info("Cache empty, loading tools from disk")
-        tools = load_tools()
-        by_category = {}
-        for raw_tool in tools["tools"]:
-            tool = build_public_tool_record(raw_tool)
-            if not is_public_tool(tool):
-                continue
-            category = tool.get("category", "Other")
-            by_category.setdefault(category, []).append(tool)
-        for category, category_tools in by_category.items():
-            by_category[category] = sorted(category_tools, key=lambda tool: tool.get("name", "").lower())
-        tools_cache.update(by_category)
-        logger.info(f"Loaded {sum(len(tools) for tools in by_category.values())} tools into cache")
-    return tools_cache
-
-
-async def refresh_tools_background():
-    """Background task to refresh tools cache"""
-    logger.info("Starting background cache refresh")
-    tools = load_tools()
-    by_category = {}
-    for raw_tool in tools["tools"]:
-        tool = build_public_tool_record(raw_tool)
-        if not is_public_tool(tool):
-            continue
-        category = tool.get("category", "Other")
-        by_category.setdefault(category, []).append(tool)
-    for category, category_tools in by_category.items():
-        by_category[category] = sorted(category_tools, key=lambda tool: tool.get("name", "").lower())
-    tools_cache.clear()
-    tools_cache.update(by_category)
-    logger.info(f"Background refresh complete, cached {sum(len(tools) for tools in by_category.values())} tools")
 
 
 def get_all_tools() -> list:
@@ -1089,7 +1142,19 @@ def render_comparison_sections(comparison: dict, tool1_name: str, tool2_name: st
 
 
 def _build_enhanced_pipeline_data() -> List[Dict]:
-    """Build enhanced pipeline data with analytics and visual elements."""
+    """Build enhanced pipeline data with analytics and visual elements (cached for 60s)."""
+    global _pipeline_status_cache
+    global _pipeline_status_cache_at
+
+    monotonic_now = time.monotonic()
+    with _pipeline_status_cache_lock:
+        if (
+            _pipeline_status_cache is not None
+            and _pipeline_status_cache_at is not None
+            and (monotonic_now - _pipeline_status_cache_at) < PIPELINE_STATUS_CACHE_TTL_SECONDS
+        ):
+            return copy.deepcopy(_pipeline_status_cache)
+
     from datetime import datetime
     from datetime import timedelta
     from datetime import timezone
@@ -1211,6 +1276,10 @@ def _build_enhanced_pipeline_data() -> List[Dict]:
                 }
             )
 
+    with _pipeline_status_cache_lock:
+        _pipeline_status_cache = copy.deepcopy(enhanced_pipelines)
+        _pipeline_status_cache_at = time.monotonic()
+
     return enhanced_pipelines
 
 
@@ -1264,12 +1333,28 @@ def _tool_fact_items(tool: dict) -> list:
 
 def _tool_links(tool: dict) -> list:
     links = []
-    canonical_url = tool.get("canonical_url") or tool.get("url")
+    canonical_url = _safe_external_href(tool.get("canonical_url") or tool.get("url"))
     if canonical_url:
-        links.append(A("Visit official website", href=canonical_url, target="_blank", _class="cta-button"))
-    source_url = tool.get("source_url")
+        links.append(
+            A(
+                "Visit official website",
+                href=canonical_url,
+                target="_blank",
+                rel="noopener noreferrer",
+                _class="cta-button",
+            )
+        )
+    source_url = _safe_external_href(tool.get("source_url"))
     if source_url and source_url != canonical_url:
-        links.append(A("View source", href=source_url, target="_blank", _class="secondary-link"))
+        links.append(
+            A(
+                "View source",
+                href=source_url,
+                target="_blank",
+                rel="noopener noreferrer",
+                _class="secondary-link",
+            )
+        )
     return links
 
 
@@ -1291,8 +1376,13 @@ def tool_card(tool):
 def tool_card_external(tool):
     """Tool card component that links to external URL (for homepage)"""
     summary = get_tool_summary(tool)
+    safe_url = _safe_external_href(tool.get("url")) or "#"
+    attrs = {"href": safe_url, "_class": "tool-card"}
+    if safe_url != "#":
+        attrs["target"] = "_blank"
+        attrs["rel"] = "noopener noreferrer"
     return A(
-        {"href": tool["url"], "target": "_blank", "_class": "tool-card"},
+        attrs,
         H5(tool["name"]),
         P(summary),
         **{"data-search": f"{tool['name'].lower()} {summary.lower()}"},
@@ -1707,7 +1797,7 @@ async def get():
             Meta({"name": "twitter:title", "content": meta_title}),
             Meta({"name": "twitter:description", "content": meta_desc}),
             Script(
-                json.dumps(
+                _safe_json_ld(
                     {
                         "@context": "https://schema.org",
                         "@type": "WebSite",
@@ -1797,8 +1887,8 @@ async def get_tool_page(slug: str):
             Meta({"property": "og:description", "content": meta_desc}),
             Meta({"property": "og:type", "content": "website"}),
             Meta({"property": "og:url", "content": f"{base_url}/tools/{slug}"}),
-            Script(json.dumps(breadcrumbs), type="application/ld+json"),
-            Script(json.dumps(product_schema), type="application/ld+json"),
+            Script(_safe_json_ld(breadcrumbs), type="application/ld+json"),
+            Script(_safe_json_ld(product_schema), type="application/ld+json"),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
             *umami_scripts(),
         ),
@@ -1930,7 +2020,7 @@ async def get_category_page(category_slug: str):
             Meta({"property": "og:description", "content": meta_desc}),
             Meta({"property": "og:type", "content": "website"}),
             Meta({"property": "og:url", "content": f"{base_url}/category/{category_slug}"}),
-            Script(json.dumps(breadcrumbs), type="application/ld+json"),
+            Script(_safe_json_ld(breadcrumbs), type="application/ld+json"),
             StyleX(str(Path(__file__).parent / "static/styles.css")),
             *umami_scripts(),
         ),

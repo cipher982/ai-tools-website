@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Dict
 from typing import List
 
+from minio.error import S3Error
+
 from ai_tools_website.v1.data_manager import BUCKET_NAME
 from ai_tools_website.v1.data_manager import get_minio_client
 
@@ -35,57 +37,86 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 
 
 @contextmanager
-def pipeline_db():
-    """Download SQLite from MinIO, yield connection, upload back with proper binary handling."""
+def pipeline_db(readonly: bool = True):
+    """Download SQLite from MinIO, yield connection, and optionally upload changes back."""
 
     # Create temporary file for SQLite operations
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
         tmp_path = Path(tmp_file.name)
 
+    conn = None
+    try:
+        client = get_minio_client()
+
+        # Try to download existing DB
+        response = None
         try:
-            client = get_minio_client()
+            response = client.get_object(BUCKET_NAME, DB_FILE_KEY)
+            with open(tmp_path, "wb") as db_out:
+                db_out.write(response.read())
+            logger.debug("Downloaded existing pipeline database from MinIO")
+        except S3Error as e:
+            if e.code in {"NoSuchKey", "NoSuchObject"}:
+                logger.info(f"No existing database found, will initialize local DB: {e.code}")
+            elif readonly:
+                logger.warning(
+                    f"Failed to download pipeline database in readonly mode ({e.code}); using empty local DB"
+                )
+            else:
+                raise
+        except Exception as e:
+            if readonly:
+                logger.warning(f"Failed to download pipeline database in readonly mode ({e}); using empty local DB")
+            else:
+                raise
+        finally:
+            if response is not None:
+                try:
+                    if hasattr(response, "close"):
+                        response.close()
+                finally:
+                    if hasattr(response, "release_conn"):
+                        response.release_conn()
 
-            # Try to download existing DB
-            try:
-                response = client.get_object(BUCKET_NAME, DB_FILE_KEY)
-                tmp_file.write(response.read())
-                tmp_file.flush()
-                logger.debug("Downloaded existing pipeline database from MinIO")
-            except Exception as e:
-                logger.info(f"No existing database found, will create new one: {e}")
+        # Open SQLite connection
+        conn = sqlite3.connect(str(tmp_path))
+        conn.row_factory = sqlite3.Row  # Enable dict-like access
 
-            # Open SQLite connection
-            conn = sqlite3.connect(str(tmp_path))
-            conn.row_factory = sqlite3.Row  # Enable dict-like access
+        # Initialize schema if needed
+        conn.execute(SCHEMA)
+        conn.commit()
 
-            # Initialize schema if needed
-            conn.execute(SCHEMA)
-            conn.commit()
+        # Yield connection for operations
+        yield conn
 
-            # Yield connection for operations
-            yield conn
-
-            # Commit any pending transactions
+        if not readonly:
+            # Commit any pending transactions before reading SQLite file
             conn.commit()
             conn.close()
+            conn = None
 
             # Upload updated database back to MinIO
             with open(tmp_path, "rb") as db_file:
                 db_data = db_file.read()
-                client.put_object(
-                    BUCKET_NAME, DB_FILE_KEY, BytesIO(db_data), len(db_data), content_type="application/octet-stream"
-                )
+            client.put_object(
+                BUCKET_NAME, DB_FILE_KEY, BytesIO(db_data), len(db_data), content_type="application/octet-stream"
+            )
             logger.debug("Uploaded updated pipeline database to MinIO")
 
-        finally:
-            # Cleanup temporary file
-            tmp_path.unlink(missing_ok=True)
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        # Cleanup temporary file
+        tmp_path.unlink(missing_ok=True)
 
 
 def record_pipeline_run(pipeline: str, run_data: Dict) -> None:
     """Record a completed pipeline run in the database."""
 
-    with pipeline_db() as conn:
+    with pipeline_db(readonly=False) as conn:
         conn.execute(
             """
             INSERT INTO pipeline_runs

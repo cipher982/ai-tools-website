@@ -76,7 +76,7 @@ LEGACY_CATEGORY_MAP = {
 
 
 def canonicalize_url(value: Any) -> str:
-    """Normalize a URL for stable storage."""
+    """Normalize an HTTP(S) URL for stable storage."""
     if value is None:
         return ""
 
@@ -85,14 +85,15 @@ def canonicalize_url(value: Any) -> str:
         return ""
 
     parsed = urlsplit(raw)
-    if not parsed.scheme or not parsed.netloc:
-        return raw.rstrip("/")
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
 
     path = parsed.path.rstrip("/")
     if path == "/":
         path = ""
 
-    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, parsed.query, ""))
+    return urlunsplit((scheme, parsed.netloc.lower(), path, parsed.query, ""))
 
 
 def category_sort_key(category: str) -> tuple[int, str]:
