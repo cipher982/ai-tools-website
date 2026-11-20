@@ -1,4 +1,5 @@
 from ai_tools_website.v1.seo_utils import generate_comparison_slug
+from ai_tools_website.v1.seo_utils import generate_product_schema
 from ai_tools_website.v1.seo_utils import generate_tool_slug
 
 
@@ -26,3 +27,21 @@ def test_generate_comparison_slug_can_use_provided_slugs():
         tool2_slug="tool-two",
     )
     assert slug == "tool-one-vs-tool-two"
+
+
+def test_generate_product_schema_omits_product_type_without_offers_or_reviews():
+    schema = generate_product_schema(
+        {
+            "name": "Cursor",
+            "slug": "cursor",
+            "summary": "AI code editor",
+            "category": "Code Assistants",
+            "url": "https://cursor.com",
+        },
+        "https://drose.io/aitools",
+    )
+    assert schema["@type"] == "SoftwareApplication"
+    assert schema["url"] == "https://drose.io/aitools/tools/cursor"
+    assert schema["sameAs"] == "https://cursor.com"
+    assert "offers" not in schema
+    assert "aggregateRating" not in schema

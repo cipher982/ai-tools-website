@@ -332,14 +332,14 @@ def generate_breadcrumb_list(path_segments: List[Dict[str, str]], base_url: str)
 
 
 def generate_product_schema(tool: Dict, base_url: str) -> Dict:
-    """Generate Product/SoftwareApplication JSON-LD schema."""
+    """Generate SoftwareApplication JSON-LD schema."""
     tool_slug = tool.get("slug") or generate_tool_slug(tool["name"])
     tool_url = f"{base_url}/tools/{tool_slug}"
     summary = tool.get("summary") or tool.get("description") or ""
 
     schema = {
         "@context": "https://schema.org",
-        "@type": ["Product", "SoftwareApplication"],
+        "@type": "SoftwareApplication",
         "name": tool["name"],
         "description": summary,
         "url": tool_url,
